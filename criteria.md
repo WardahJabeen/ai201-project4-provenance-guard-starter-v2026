@@ -42,63 +42,65 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
+## 1. Few false accusations on my own writing
 
-<!-- Your criterion. It must name a number. -->
+Of 10 pieces I wrote myself, at least 3 of them written plainly (short
+sentences, everyday words, no unusual vocabulary), at most 1
+is labelled high-confidence AI, in every one of the three trials.
 
-
-
-**Why this target:**
-
-
-
----
-
-## 2.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** Being wrongly accused of using AI can really hurt a
+writer, while a bit of AI text slipping through costs the site much less. So I
+allow at most 1 mistake in 10. I'm including plain writing on purpose, because
+that's the kind my first signal struggles with, and I'd rather see the problem
+than hide it behind my most polished work.
 
 ---
 
-## 3.
+## 2. Clear gap between AI and human scores
 
-<!-- Your criterion. -->
+The average combined score of 5 clearly AI-generated texts is at least 0.30
+higher than the average of 5 clearly human-written texts, in every trial.
 
-
-
-**Why this target:**
-
-
-
----
-
-## 4.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** If clearly human and clearly AI writing end up with
+similar scores, wherever I draw the line is basically a guess. A gap of 0.30
+is about the width of my unsure band (0.35 to 0.65), so the clear cases should
+land comfortably on either side of it.
 
 ---
 
-## 5.
+## 3. All three labels are reachable
 
-<!-- Your criterion. -->
+Across my label-coverage inputs, each of the three labels (human, unsure,
+AI) is produced at least once, in every trial.
 
+**Why this target:** A label that never shows up isn't doing anything, and it
+usually means my score ranges have a gap. I especially want to see the human
+label, because without it an honest writer could never be fully cleared, only
+told "we're not sure" at best.
 
+---
 
-**Why this target:**
+## 4. Every appeal is recorded
 
+10 of 10 appeals on real `content_id`s return 200, change the status to
+`under_review` and add an appeal entry to the log. An appeal with an unknown
+`content_id` returns 404 and the log's entry count doesn't change.
 
+**Why this target:** When the system gets it wrong, an appeal is the only way
+a writer can speak up. Losing even one would mean someone asked to be heard and
+nobody listened, so every single appeal needs to be recorded.
+
+---
+
+## 5. Bad input never crashes the service
+
+Of 5 bad requests (missing `text`, empty `text`, `text` under 50 characters,
+`text` over 10,000 characters, `text` set to null), 5 of 5 return a 400
+with an error message and 0 return a 500.
+
+**Why this target:** If the service crashes, the writer is left with no idea
+what went wrong, and so am I. Mistakes like an empty box or a huge paste are
+easy to make, so each one should get a clear, friendly answer instead.
 
 ---
 

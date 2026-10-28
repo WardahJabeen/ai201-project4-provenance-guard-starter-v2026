@@ -39,19 +39,19 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
-1. **Arrives** at `POST /submit` in `app.py` with `text` and `creator_id`.
-2. **Checked and given an ID** *(I build: `app.py::submit`)*: reject missing,
+1. Arrives at `POST /submit` in `app.py` with `text` and `creator_id`.
+2. Checked and given an ID *(I build: `app.py::submit`)*: reject missing,
    empty or huge text with a 400; give valid text a `content_id`.
-3. **Predictability score** *(given: `detector.model_signal`)*: a local model
+3. Predictability score *(given: `detector.model_signal`)*: a local model
    rates how predictable the text is → `model_score` (0–1, higher = more AI).
-4. **Style score** *(I build: `stylometry.style_signal`)*: sentence-length
+4. Style score *(I build: `stylometry.style_signal`)*: sentence-length
    variety, word repetition and punctuation → `style_score` (0–1, higher =
    more AI).
-5. **Combined** *(I build: `scoring.combine_signals`)*: the two scores become
+5. Combined *(I build: `scoring.combine_signals`)*: the two scores become
    one, and my rule decides what happens when they disagree.
-6. **Labelled** *(I build: `scoring.score_to_label`)*: the score becomes one of
+6. Labelled *(I build: `scoring.score_to_label`)*: the score becomes one of
    three plain-English labels: human, unsure or AI.
-7. **Logged and returned** *(I build the calls: `audit.log_decision` + the
+7. Logged and returned *(I build the calls: `audit.log_decision` + the
    response)*: the decision is saved, and the writer gets the label plus a
    `content_id` they can use to appeal.
 
@@ -103,7 +103,7 @@ All requests and responses are JSON. Every error has the same shape:
 | `style_score` | number | Signal two, 0 to 1. Higher means more likely AI. |
 
 **Errors:** `400 missing_text`, `400 text_too_short`, `400 text_too_long`,
-`400 missing_creator_id`, `429 rate_limited` (unit 8).
+`400 missing_creator_id`.
 
 #### `POST /appeal`
 
