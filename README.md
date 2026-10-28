@@ -235,14 +235,20 @@ could have tipped the score into a confident label either way.
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00 to 0.35 | "We think this was probably written by a person." |
+| unsure | above 0.35 and below 0.65 | "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work." |
+| high-confidence AI | 0.65 to 1.00 | "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it." |
 
 **Why I worded the "unsure" one this way:**
 <!-- It's the hardest of the three. It has to admit uncertainty without
      sounding like an accusation, because the person reading it may well have
      written every word themselves. -->
+
+The person reading it may well have written every word themselves, so it
+says plainly that we can't tell, then reassures them straight away that this
+happens to plenty of real writers and isn't a judgment about them. I left out
+numbers and words like "suspicious" or "flagged", because those sound like an
+accusation even when the system is only unsure.
 
 
 
@@ -261,38 +267,33 @@ could have tipped the score into a confident label either way.
      diagnostics. -->
 
 ```bash
-$ curl -X POST http://127.0.0.1:5000/submit \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Pick one public community with lots of text and real variation in quality. Sports forums, music discussion boards, film communities, and gaming subreddits all work. You need to be able to collect 200 public posts from it.", "creator_id": "wardah"}'
+$ curl -X POST http://127.0.0.1:5000/submit   -H "Content-Type: application/json"   -d '{"text": "It seems like I have uncommited files. I can'\''t remember if its the latest working version that I forgot to commit or if its something buggy. Can you give me a brief summary of files and the changes that hasnt been commited in simple terms?", "creator_id": "wardah"}'
 ```
 
 ```json
 {
-  "confidence": null,
-  "content_id": "31992622-7747-4c98-827b-0cf644da8778",
+  "confidence": 0.4404,
+  "content_id": "18bec91d-4c17-49e0-b79e-9e832b6fb42f",
   "guess": "unsure",
-  "label": "PLACEHOLDER label",
-  "model_score": 0.2389,
-  "style_score": null
+  "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+  "model_score": 0.4304,
+  "style_score": 0.4504
 }
 ```
-
-<!-- Milestone 3: only signal one is wired in. confidence, label and
-     style_score are placeholders until Milestones 4 and 5. -->
 
 **An appeal**
 
 ```bash
-$ curl -X POST http://127.0.0.1:5000/appeal \
-  -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+$ curl -X POST http://127.0.0.1:5000/appeal   -H "Content-Type: application/json"   -d '{"content_id": "18bec91d-4c17-49e0-b79e-9e832b6fb42f", "reasoning": "I wrote this myself. It is a quick question I typed to a coding assistant, which is why it is short and has typos."}'
 ```
 
 ```json
-
+{
+  "content_id": "18bec91d-4c17-49e0-b79e-9e832b6fb42f",
+  "message": "Thanks, we've received your appeal. A person will review your writing.",
+  "status": "under_review"
+}
 ```
-
-<!-- /appeal is built in Milestone 5. -->
 
 **What the log shows afterwards**
 
@@ -302,33 +303,46 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 ```json
 {
-  "count": 2,
+  "count": 3,
   "entries": [
     {
-      "combined_score": null,
-      "content_id": "326bb046-83dd-40cc-aa44-6913f6d75f79",
+      "combined_score": 0.4404,
+      "content_id": "18bec91d-4c17-49e0-b79e-9e832b6fb42f",
       "creator_id": "wardah",
       "guess": "unsure",
-      "label": "PLACEHOLDER label",
-      "model_score": 0.1605,
+      "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+      "model_score": 0.4304,
       "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-10-28T14:10:20+00:00"
+      "style_score": 0.4504,
+      "timestamp": "2026-10-28T14:46:49+00:00"
     },
     {
-      "combined_score": null,
-      "content_id": "31992622-7747-4c98-827b-0cf644da8778",
+      "combined_score": 0.2577,
+      "content_id": "5f996beb-7d5d-4bff-a740-ea8588d2ab53",
       "creator_id": "wardah",
-      "guess": "unsure",
-      "label": "PLACEHOLDER label",
-      "model_score": 0.2389,
+      "guess": "human",
+      "label": "We think this was probably written by a person.",
+      "model_score": 0.2328,
       "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-10-28T14:15:57+00:00"
+      "style_score": 0.2826,
+      "timestamp": "2026-10-28T14:46:49+00:00"
+    },
+    {
+      "content_id": "18bec91d-4c17-49e0-b79e-9e832b6fb42f",
+      "creator_id": "wardah",
+      "event": "appeal",
+      "reasoning": "I wrote this myself. It is a quick question I typed to a coding assistant, which is why it is short and has typos.",
+      "status": "under_review",
+      "timestamp": "2026-10-28T14:48:52+00:00"
     }
   ]
 }
 ```
+
+The first entry is the original decision, still marked `decided`. The appeal
+is added as its own entry with the same `content_id` and status
+`under_review`, so the log keeps both: what was decided, and that the writer
+challenged it.
 
 ---
 

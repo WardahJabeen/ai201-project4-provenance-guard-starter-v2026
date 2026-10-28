@@ -238,10 +238,7 @@ def submit():
 
     style_score = stylometry.style_signal(text)
     confidence = scoring.combine_signals(model_score, style_score)
-
-    # Placeholders until Milestone 5.
-    guess = "unsure"
-    label = "PLACEHOLDER label"
+    guess, label = scoring.score_to_label(confidence)
 
     audit.log_decision(
         content_id=content_id,
@@ -288,14 +285,39 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
 
-    # TODO: delete this and build the route.
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
+
+    if not isinstance(content_id, str) or not content_id.strip():
+        return _error("missing_content_id", "Please include the content_id from your result.")
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return _error("missing_reasoning", "Please tell us why you think the result is wrong.")
+
+    content_id = content_id.strip()
+    entries = audit.entries_for(content_id)
+    if not entries:
+        return _error(
+            "unknown_content_id",
+            "We couldn't find a submission with that content_id. Please check it matches your result.",
+            404,
+        )
+
+    # The appeal is filed under the creator of the original submission.
+    audit.log_appeal(
+        content_id=content_id,
+        creator_id=entries[0].get("creator_id", "unknown"),
+        reasoning=reasoning.strip(),
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Thanks, we've received your appeal. A person will review your writing.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────
