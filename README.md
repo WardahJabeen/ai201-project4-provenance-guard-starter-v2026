@@ -164,22 +164,27 @@ human.
 
 ### Signal two — the style signal
 
-**What it measures:** The shape of the text, without reading it. It looks at
-three things: how much sentence lengths vary, how often words repeat
-(type-token ratio: unique words divided by total words) and how much
-punctuation is used. These combine into a `style_score` (higher = more AI).
+**What it measures:** The shape and tone of the text, without reading it. It
+looks at how much sentence lengths vary, how often words repeat (type-token
+ratio: unique words divided by total words), how much punctuation is used and
+the tone: how bossy or how warm the text sounds (bare commands with no "you"
+or "I", short fragments, and softening words like "maybe" or "I think"). These
+combine into a `style_score` (higher = more AI).
 
-**Why that might differ between human and AI writing:** AI tends to write
-even, medium-length sentences with a narrower vocabulary, because picking the
-most likely word keeps landing on the same common ones. Human writing is more
-uneven: a three-word sentence next to a forty-word one, more varied words, and
-punctuation like dashes and semicolons.
+**Why that might differ between human and AI writing:** AI often writes even,
+medium-length sentences with a narrower vocabulary, because picking the most
+likely word keeps landing on the same common ones. Its tone also tends to sit
+at one of two extremes: clipped and instructional, like it's giving orders, or
+overly warm and polite. Human writing is more uneven, in both sentence shape
+and tone.
 
-**What it can't see:** What the text actually says. It only counts surface
-features, so cheap edits that change the shape without changing the content
-can fool it. Adding a few typos, mixing very short and very long sentences,
-throwing in extra dashes or pasting in a quote can make AI text look human,
-even though the writing underneath is the same.
+**What it can't see:** What the text actually says or who wrote it. It only
+counts surface features, so cheap edits like adding typos, mixing very short
+and long sentences or throwing in "I think" can make AI text look human. Tone
+is also a matter of what kind of writing something is: a teacher's handout or
+a recipe sounds bossy and was written by a person, and some AI writes in a
+lively, uneven style. My own AI sample ("Two rules. Public only...") had very
+uneven sentences, so sentence length alone would have called it human.
 
 ### The combining rule
 
@@ -238,12 +243,22 @@ even though the writing underneath is the same.
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "Pick one public community with lots of text and real variation in quality. Sports forums, music discussion boards, film communities, and gaming subreddits all work. You need to be able to collect 200 public posts from it.", "creator_id": "wardah"}'
 ```
 
 ```json
-
+{
+  "confidence": null,
+  "content_id": "31992622-7747-4c98-827b-0cf644da8778",
+  "guess": "unsure",
+  "label": "PLACEHOLDER label",
+  "model_score": 0.2389,
+  "style_score": null
+}
 ```
+
+<!-- Milestone 3: only signal one is wired in. confidence, label and
+     style_score are placeholders until Milestones 4 and 5. -->
 
 **An appeal**
 
@@ -257,6 +272,8 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
 
 ```
 
+<!-- /appeal is built in Milestone 5. -->
+
 **What the log shows afterwards**
 
 ```bash
@@ -264,7 +281,33 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-
+{
+  "count": 2,
+  "entries": [
+    {
+      "combined_score": null,
+      "content_id": "326bb046-83dd-40cc-aa44-6913f6d75f79",
+      "creator_id": "wardah",
+      "guess": "unsure",
+      "label": "PLACEHOLDER label",
+      "model_score": 0.1605,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-10-28T14:10:20+00:00"
+    },
+    {
+      "combined_score": null,
+      "content_id": "31992622-7747-4c98-827b-0cf644da8778",
+      "creator_id": "wardah",
+      "guess": "unsure",
+      "label": "PLACEHOLDER label",
+      "model_score": 0.2389,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-10-28T14:15:57+00:00"
+    }
+  ]
+}
 ```
 
 ---
@@ -285,9 +328,21 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* Help running signal one on three texts I picked as AI,
+  human and in between, and understanding the results.
+- *What came back:* All three leaned human (AI 0.23, human 0.43, in between
+  0.17, where higher means more AI). The AI text even scored more human than my
+  real human text. The explanation was that signal one only measures
+  predictability: short fragments, dashes and specific details are hard for
+  gpt2 to predict, so lively AI writing looks human. The starter code's idea for
+  signal two was that AI writes even, medium-length sentences, but my AI sample
+  had very uneven ones, so that wouldn't have caught it either.
+- *What I changed:* I noticed the AI text gave itself away through tone, not
+  sentence shape: instructions written as bare commands with no "you" or "I"
+  and no warmth, or, in chatbot replies, the opposite extreme of being overly
+  warm and polite. I added tone as a fourth measure for signal two and updated
+  its blind spots, since bossy human writing like a recipe would also get
+  flagged.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 

@@ -30,6 +30,11 @@ from flask import Flask, jsonify, request
 
 import audit
 import config
+import detector
+
+# Text length limits, from the endpoint contract in README.md.
+MIN_TEXT_CHARS = 50
+MAX_TEXT_CHARS = 10_000
 
 app = Flask(__name__)
 
@@ -199,17 +204,65 @@ def submit():
     what should this do when `text` is missing, empty, or enormous? A crash on
     a malformed input is one of the most common real failures there is.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
 
-    # TODO: delete this and build the route.
+    text = payload.get("text")
+    creator_id = payload.get("creator_id")
+
+    if not isinstance(text, str) or not text.strip():
+        return _error("missing_text", "Please include some text to check.")
+    text = text.strip()
+    if len(text) < MIN_TEXT_CHARS:
+        return _error(
+            "text_too_short",
+            f"Please send at least {MIN_TEXT_CHARS} characters, a few sentences.",
+        )
+    if len(text) > MAX_TEXT_CHARS:
+        return _error(
+            "text_too_long",
+            f"Please send at most {MAX_TEXT_CHARS:,} characters.",
+        )
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return _error("missing_creator_id", "Please include a creator_id.")
+
+    content_id = str(uuid.uuid4())
+
+    try:
+        model_score = detector.model_signal(text)
+    except detector.DetectorUnavailable as exc:
+        return _error("detector_unavailable", str(exc), 503)
+
+    # Placeholders until Milestones 4 and 5.
+    style_score = None
+    confidence = None
+    guess = "unsure"
+    label = "PLACEHOLDER label"
+
+    audit.log_decision(
+        content_id=content_id,
+        creator_id=creator_id,
+        guess=guess,
+        model_score=model_score,
+        style_score=style_score,
+        combined_score=confidence,
+        label=label,
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /submit isn't built yet — see the TODO in app.py.",
-        "you_sent": {
-            "text_length": len(payload.get("text", "")),
-            "creator_id": payload.get("creator_id"),
-        },
-    }), 501
+        "content_id": content_id,
+        "guess": guess,
+        "confidence": confidence,
+        "label": label,
+        "model_score": model_score,
+        "style_score": style_score,
+    })
+
+
+def _error(code: str, message: str, status: int = 400):
+    """Every error has the same shape — see the endpoint contract in README.md."""
+    return jsonify({"error": code, "message": message}), status
 
 
 @app.post("/appeal")
