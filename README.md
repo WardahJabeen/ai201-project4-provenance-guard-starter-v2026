@@ -39,7 +39,99 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+1. **Arrives** at `POST /submit` in `app.py` with `text` and `creator_id`.
+2. **Checked and given an ID** *(I build: `app.py::submit`)*: reject missing,
+   empty or huge text with a 400; give valid text a `content_id`.
+3. **Predictability score** *(given: `detector.model_signal`)*: a local model
+   rates how predictable the text is → `model_score` (0–1, higher = more AI).
+4. **Style score** *(I build: `stylometry.style_signal`)*: sentence-length
+   variety, word repetition and punctuation → `style_score` (0–1, higher =
+   more AI).
+5. **Combined** *(I build: `scoring.combine_signals`)*: the two scores become
+   one, and my rule decides what happens when they disagree.
+6. **Labelled** *(I build: `scoring.score_to_label`)*: the score becomes one of
+   three plain-English labels: human, unsure or AI.
+7. **Logged and returned** *(I build the calls: `audit.log_decision` + the
+   response)*: the decision is saved, and the writer gets the label plus a
+   `content_id` they can use to appeal.
 
+### Tracing a false positive
+
+<!-- Milestone 1: a real writer submits real work and the system calls it AI.
+     The scores below are expected values worked out from the code, not a
+     real run yet. -->
+
+**Who:** a second-language writer submits their own work, written in simple
+words and short, even sentences.
+
+**Their score:** about 0.8. Plain writing is easy to predict and evenly
+shaped, so both signals call it AI, and together they're even more sure.
+
+**What the label says:** high-confidence AI, with no reason given.
+
+**What they can do:** appeal with their `content_id`. A person has to review
+it; nothing re-checks the text.
+
+**What this means for my thresholds:** the AI label should start higher than
+0.65, or the unsure band should be wider, so honest plain writing doesn't get
+called AI.
+
+
+### The two endpoints
+
+All requests and responses are JSON. Every error has the same shape:
+`{"error": "<short_code>", "message": "<sentence for a person>"}`.
+
+#### `POST /submit`
+
+**In:**
+
+| Field | Type | Rules |
+|---|---|---|
+| `text` | string | Required. 50 to 10,000 characters after trimming spaces. |
+| `creator_id` | string | Required. Not empty. |
+
+**Out (200):**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `content_id` | string | New UUID for this submission. Needed to appeal. |
+| `guess` | string | `"human"`, `"unsure"` or `"ai"`. |
+| `confidence` | number | The combined score, 0 to 1. Higher means more likely AI. |
+| `label` | string | The sentence the writer sees. |
+| `model_score` | number | Signal one, 0 to 1. Higher means more likely AI. |
+| `style_score` | number | Signal two, 0 to 1. Higher means more likely AI. |
+
+**Errors:** `400 missing_text`, `400 text_too_short`, `400 text_too_long`,
+`400 missing_creator_id`, `429 rate_limited` (unit 8).
+
+#### `POST /appeal`
+
+**In:**
+
+| Field | Type | Rules |
+|---|---|---|
+| `content_id` | string | Required. Must match a past submission. |
+| `reasoning` | string | Required. Not empty. Why the writer thinks the label is wrong. |
+
+**Out (200):**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `content_id` | string | The submission being appealed. |
+| `status` | string | Always `"under_review"`. |
+| `message` | string | Confirms the appeal was received and a person will review it. |
+
+**Errors:** `400 missing_content_id`, `400 missing_reasoning`,
+`404 unknown_content_id`.
+
+Appealing the same item again is allowed; each appeal is logged. The
+`creator_id` for the appeal log entry comes from the original submission.
+
+**Read-back check:** could someone build against this without asking me? I
+filled the gaps I'd have asked about: the text length limits, what
+`confidence` means, which way the scores point, the error format, what happens
+with an unknown `content_id`, and whether you can appeal twice.
 
 ---
 
@@ -53,19 +145,41 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** How predictable the text is to a language model (gpt2,
+running locally). This is called perplexity: low perplexity means the model
+could have guessed each next word. The more predictable the text, the higher
+the `model_score` (more likely AI).
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI writes by picking
+the most likely next word again and again, so its text is easy for a model to
+predict. People make more surprising choices: unusual words, sudden changes of
+direction and specific personal details.
 
-**What it can't see:**
+**What it can't see:** Who actually wrote the text. It only knows whether the
+words were predictable, and plain writing is predictable no matter who wrote
+it. So a person who writes simply, such as someone writing in a second
+language, a younger writer or anyone keeping it plain on purpose, can score as
+AI. The reverse also happens: AI text with rarer words swapped in can score as
+human.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** The shape of the text, without reading it. It looks at
+three things: how much sentence lengths vary, how often words repeat
+(type-token ratio: unique words divided by total words) and how much
+punctuation is used. These combine into a `style_score` (higher = more AI).
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** AI tends to write
+even, medium-length sentences with a narrower vocabulary, because picking the
+most likely word keeps landing on the same common ones. Human writing is more
+uneven: a three-word sentence next to a forty-word one, more varied words, and
+punctuation like dashes and semicolons.
 
-**What it can't see:**
+**What it can't see:** What the text actually says. It only counts surface
+features, so cheap edits that change the shape without changing the content
+can fool it. Adding a few typos, mixing very short and very long sentences,
+throwing in extra dashes or pasting in a quote can make AI text look human,
+even though the writing underneath is the same.
 
 ### The combining rule
 
@@ -159,9 +273,15 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* A simple explanation of what this project does and the
+  general flow a submission follows through the service, so I could write the
+  Milestone 1 trace.
+- *What came back:* A plain summary of the project (a service that labels
+  writing as human, unsure or AI using two signals, with an appeal path) and a
+  first draft of the path through `app.py`, `detector.py`, `stylometry.py`,
+  `scoring.py` and `audit.py`.
+- *What I changed:* The first draft was too detailed, so I cut it down to seven
+  short steps and marked which ones I build myself and which are given.
 
 **Moment 2**
 
