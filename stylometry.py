@@ -63,9 +63,18 @@ def sentence_length_spread(text: str) -> float:
     Watch the edge case: a one-sentence submission has no spread at all, and
     `stdev` raises on fewer than two values. Decide what that should return
     before the attack set decides for you.
+
+    Mine: standard deviation of words-per-sentence divided by the mean (the
+    coefficient of variation). 0 means every sentence is the same length;
+    higher means more uneven, which reads as more human. Fewer than two
+    sentences returns None — there's no spread to measure, and 0.0 would
+    wrongly say "perfectly even".
     """
-    # TODO: replace this
-    return 0.0
+    lengths = [len(words(s)) for s in sentences(text)]
+    lengths = [n for n in lengths if n > 0]
+    if len(lengths) < 2:
+        return None
+    return statistics.stdev(lengths) / statistics.mean(lengths)
 
 
 def type_token_ratio(text: str) -> float:
@@ -79,9 +88,23 @@ def type_token_ratio(text: str) -> float:
     longer, because common words repeat. Two texts of different lengths aren't
     directly comparable on it, and if your test inputs vary a lot in length,
     that alone can look like a signal.
+
+    Mine handles that by averaging the ratio over every 50-word window
+    (a moving-average type-token ratio), so a long text and a short one are
+    measured on the same footing. Under 50 words it falls back to the plain
+    ratio over the whole text.
     """
-    # TODO: replace this
-    return 0.0
+    tokens = words(text)
+    if not tokens:
+        return 0.0
+    window = 50
+    if len(tokens) <= window:
+        return len(set(tokens)) / len(tokens)
+    ratios = [
+        len(set(tokens[i:i + window])) / window
+        for i in range(len(tokens) - window + 1)
+    ]
+    return statistics.mean(ratios)
 
 
 def punctuation_density(text: str) -> float:
@@ -93,9 +116,17 @@ def punctuation_density(text: str) -> float:
         semicolons, dashes — is a real choice. Semicolons and em dashes are
         more interesting than full stops, because they vary more between
         writers.
+
+    Mine counts everything except full stops — commas, semicolons, colons,
+    dashes, brackets, quotes, question and exclamation marks, ellipses — per
+    word. Full stops are left out because every sentence has one, so they say
+    more about sentence count than about style. Higher reads as more human.
     """
-    # TODO: replace this
-    return 0.0
+    tokens = words(text)
+    if not tokens:
+        return 0.0
+    marks = re.findall(r"[,;:!?()\"“”…]|—|–| - ", text)
+    return len(marks) / len(tokens)
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
@@ -121,9 +152,27 @@ def style_signal(text: str) -> float:
     clearly human, plain conventional human writing, lightly-edited AI — before
     you trust it. Plain and ordinary, not formal: formal prose reads as *human*
     to signal one, and it is plain writing that gets accused.
+
+    Mine: each measure is mapped onto 0–1 with a straight ramp between a value
+    that looks clearly AI (→ 1.0) and one that looks clearly human (→ 0.0),
+    then the three are averaged with weights. All three run "higher = more
+    human" raw, so every ramp flips them. The anchor values come from running
+    my sample texts; spread separated them best, punctuation worst (casual
+    human writing barely uses any), so the weights follow that.
     """
-    # TODO: replace this
-    return 0.5
+    spread = sentence_length_spread(text)
+    # One sentence has no spread to judge, so that part sits at neutral.
+    spread_ai = 0.5 if spread is None else _ramp(spread, ai=0.20, human=0.60)
+    ttr_ai = _ramp(type_token_ratio(text), ai=0.70, human=0.90)
+    punct_ai = _ramp(punctuation_density(text), ai=0.02, human=0.10)
+
+    score = 0.5 * spread_ai + 0.3 * ttr_ai + 0.2 * punct_ai
+    return round(score, 4)
+
+
+def _ramp(value: float, ai: float, human: float) -> float:
+    """1.0 at the AI-looking value, 0.0 at the human-looking one, clipped."""
+    return min(max((human - value) / (human - ai), 0.0), 1.0)
 
 
 if __name__ == "__main__":
@@ -139,4 +188,3 @@ if __name__ == "__main__":
     print(f"type_token_ratio         {type_token_ratio(text)}")
     print(f"punctuation_density      {punctuation_density(text)}")
     print(f"style_signal             {style_signal(text)}   (higher = more likely AI)")
-    print("\nAll zeros? These are stubs — Milestone 4 is where you build them.")

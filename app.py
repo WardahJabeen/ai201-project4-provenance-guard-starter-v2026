@@ -31,6 +31,8 @@ from flask import Flask, jsonify, request
 import audit
 import config
 import detector
+import scoring
+import stylometry
 
 # Text length limits, from the endpoint contract in README.md.
 MIN_TEXT_CHARS = 50
@@ -234,9 +236,10 @@ def submit():
     except detector.DetectorUnavailable as exc:
         return _error("detector_unavailable", str(exc), 503)
 
-    # Placeholders until Milestones 4 and 5.
-    style_score = None
-    confidence = None
+    style_score = stylometry.style_signal(text)
+    confidence = scoring.combine_signals(model_score, style_score)
+
+    # Placeholders until Milestone 5.
     guess = "unsure"
     label = "PLACEHOLDER label"
 

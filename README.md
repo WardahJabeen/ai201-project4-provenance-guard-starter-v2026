@@ -164,36 +164,48 @@ human.
 
 ### Signal two — the style signal
 
-**What it measures:** The shape and tone of the text, without reading it. It
-looks at how much sentence lengths vary, how often words repeat (type-token
-ratio: unique words divided by total words), how much punctuation is used and
-the tone: how bossy or how warm the text sounds (bare commands with no "you"
-or "I", short fragments, and softening words like "maybe" or "I think"). These
-combine into a `style_score` (higher = more AI).
+**What it measures:** The shape of the text, without reading it. It looks at
+three things: how much sentence lengths vary, how often words repeat
+(type-token ratio: unique words divided by total words) and how much
+punctuation is used. These combine into a `style_score` (higher = more AI).
+I'd also like to add tone as a fourth measure later: how bossy or how warm
+the text sounds (bare commands with no "you" or "I", short fragments, and
+softening words like "maybe" or "I think"). It isn't built yet.
 
 **Why that might differ between human and AI writing:** AI often writes even,
 medium-length sentences with a narrower vocabulary, because picking the most
-likely word keeps landing on the same common ones. Its tone also tends to sit
-at one of two extremes: clipped and instructional, like it's giving orders, or
-overly warm and polite. Human writing is more uneven, in both sentence shape
-and tone.
+likely word keeps landing on the same common ones. Human writing is more
+uneven: short and long sentences mixed together, more varied words, and
+punctuation like dashes and semicolons. In my tests AI tone also stood out,
+sitting at one of two extremes: clipped and instructional, like it's giving
+orders, or overly warm and polite. That's what the planned tone measure is for.
 
 **What it can't see:** What the text actually says or who wrote it. It only
-counts surface features, so cheap edits like adding typos, mixing very short
-and long sentences or throwing in "I think" can make AI text look human. Tone
-is also a matter of what kind of writing something is: a teacher's handout or
-a recipe sounds bossy and was written by a person, and some AI writes in a
-lively, uneven style. My own AI sample ("Two rules. Public only...") had very
-uneven sentences, so sentence length alone would have called it human.
+counts surface features, so cheap edits like adding typos or mixing very short
+and long sentences can make AI text look human. My own AI sample ("Two rules.
+Public only...") had very uneven sentences, so this signal called it human.
+A tone measure would have the same kind of blind spot: a teacher's handout or
+a recipe sounds bossy and was written by a person, and adding "I think" to AI
+text would make it sound warmer.
 
 ### The combining rule
 
 <!-- Write the rule in words, then give the numbers. What happens when the two
      signals disagree? -->
 
-**The rule:**
+**The rule:** Take a weighted average of the two signals, counting them
+equally, since each one fails on a different kind of writing and neither has
+earned more trust. If the two disagree by more than a set gap, keep the
+result inside the unsure band. A big split means the two methods are reading
+the text differently, and the honest answer then is "not sure". That way a
+split alone can never lead to an AI accusation, or a confident all-clear.
 
 **The numbers:**
+
+- Model signal weight: 0.5
+- Style signal weight: 0.5
+- Disagreement gap: 0.30 (the signals differ by more than this → the score
+  is kept between 0.35 and 0.65, the unsure band)
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -202,7 +214,15 @@ uneven sentences, so sentence length alone would have called it human.
 
 **A case where my two signals split, and what my rule does with it:**
 
-
+My lightly-edited AI test text is the detector's built-in AI sample with
+small human-style edits: contractions, one typo and one sentence cut short
+("Thats important."). The model signal gave 0.65 (leaning AI), because the
+wording underneath is still predictable. The style signal gave 0.23 (human),
+because that one short sentence made the sentence lengths uneven. They differ
+by 0.42, more than my 0.30 gap, so my rule keeps the result in the unsure
+band. The average, 0.44, already sits there, so here the rule confirms the
+average rather than changing it. Without the rule, a slightly bigger split
+could have tipped the score into a confident label either way.
 
 ---
 
@@ -328,21 +348,29 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 **Moment 2**
 
-- *What I asked for:* Help running signal one on three texts I picked as AI,
-  human and in between, and understanding the results.
-- *What came back:* All three leaned human (AI 0.23, human 0.43, in between
-  0.17, where higher means more AI). The AI text even scored more human than my
-  real human text. The explanation was that signal one only measures
-  predictability: short fragments, dashes and specific details are hard for
-  gpt2 to predict, so lively AI writing looks human. The starter code's idea for
-  signal two was that AI writes even, medium-length sentences, but my AI sample
-  had very uneven ones, so that wouldn't have caught it either.
+- *What I asked for:* Help running both signals on test texts and figuring
+  out why they weren't catching AI writing. First three texts I picked as AI,
+  human and in between, then four calibration inputs: clearly AI, clearly
+  human, formal human and lightly-edited AI.
+- *What came back:* On my three texts both signals leaned human every time,
+  and my AI text scored more human than my real human text. Signal one only
+  measures predictability, so specific details and short fragments made the
+  AI look human, and signal two read the uneven sentence lengths as human too.
+  On the four calibration inputs neither signal was flat, but each ranked some
+  texts in the wrong order. The Gettysburg Address scored 0.64, just under the
+  AI threshold, because gpt2 has effectively memorized it and the speech
+  repeats words on purpose. Adding one short sentence ("Thats important.") to
+  AI text dropped its style score from 0.79 to 0.23, though the model signal
+  still read it as fairly predictable.
 - *What I changed:* I noticed the AI text gave itself away through tone, not
   sentence shape: instructions written as bare commands with no "you" or "I"
   and no warmth, or, in chatbot replies, the opposite extreme of being overly
-  warm and polite. I added tone as a fourth measure for signal two and updated
-  its blind spots, since bossy human writing like a recipe would also get
-  flagged.
+  warm and polite. I haven't built it yet, but I plan to add tone as a
+  fourth measure for signal two. I noted it in the signal's description,
+  along with its blind spot: bossy human writing like a recipe would also get
+  flagged. The calibration results
+  also convinced me the AI threshold needs to go up, so honest formal writing
+  doesn't land so close to it.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
