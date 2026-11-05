@@ -386,6 +386,18 @@ challenged it.
   also convinced me the AI threshold needs to go up, so honest formal writing
   doesn't land so close to it.
 
+**Moment 3**
+
+- *What I asked for:* Help choosing my rate limits, and what a "caller"
+  should count as.
+- *What came back:* 5 per minute and 30 per day, so a real writer never hits
+  the limit but a script would need over a month to send 1,000 tries. It also
+  pointed out that a script can dodge a per-`creator_id` limit by making up a
+  new id each time.
+- *What I changed:* I asked whether 0 broken flood attacks meant my limit was
+  too loose. It didn't: the limit worked, so I kept my numbers and noted the
+  made-up id problem instead.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
@@ -1017,12 +1029,28 @@ there, because the signals agree on those and this fix never touches them.
 <!-- For each attack still getting through and each criterion still missed:
      what you'd do, and why you stopped. -->
 
+**Careful human writing is still called AI (FP02–FP05).** I'd only say "AI"
+when both signals are high. I stopped because that lets more AI through.
 
+**Edited AI is still called human (EV05, PI01, PI02).** I'd trust signal two
+less and add the tone check I planned. I stopped because that could make
+careful human writing look like AI again.
+
+**Emoji and other alphabets are called AI (MF06, MF07).** I'd answer "unsure"
+when there aren't enough English words to check. I stopped because a real fix
+needs a checker that understands other languages.
+
+**Criteria 2 and 4 are still missed.** Signal two doesn't tell AI and human
+apart well enough, and I'm keeping the logging that breaks criterion 4.
 
 **The trade I'd make if this ran for real:**
 
 <!-- Two sentences. Fewer wrong accusations means more AI text getting through.
      Say which way you'd go and WHO PAYS FOR IT. -->
+
+I'd rather say "unsure" more often than wrongly call someone's work AI. More
+AI writing gets through, so the site pays for it, but that's better than an
+honest writer being accused.
 
 
 
