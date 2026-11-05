@@ -64,7 +64,9 @@ def combine_signals(model_score: float, style_score: float) -> float:
     ) / total
 
     if abs(model_score - style_score) > config.DISAGREEMENT_GAP:
-        score = min(max(score, config.HUMAN_THRESHOLD), config.AI_THRESHOLD)
+        # Stay 0.01 inside the band: exactly 0.35 or 0.65 counts as human or
+        # AI in score_to_label, which made "not sure" a confident label.
+        score = min(max(score, config.HUMAN_THRESHOLD + 0.01), config.AI_THRESHOLD - 0.01)
 
     return round(score, 4)
 

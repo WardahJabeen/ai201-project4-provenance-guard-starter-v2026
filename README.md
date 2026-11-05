@@ -205,7 +205,7 @@ split alone can never lead to an AI accusation, or a confident all-clear.
 - Model signal weight: 0.5
 - Style signal weight: 0.5
 - Disagreement gap: 0.30 (the signals differ by more than this → the score
-  is kept between 0.35 and 0.65, the unsure band)
+  is kept between 0.36 and 0.64, just inside the unsure band)
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -907,20 +907,106 @@ the easiest to fix: it's one line of code.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** When my two signals disagree, the score used to be set
+to exactly 0.35 or 0.65, which count as "human" and "AI". Now it's set to
+0.36 or 0.64, so it always stays "unsure". One line in
+`scoring.py::combine_signals`.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** Problem 1, "my not sure rule gives sure
+answers". It broke FP06, FP07 and MF05 in the before run.
 
 ### Attack Run — After
 
 <!-- Same format. `run_attacks.py --label after` -->
 
+Full results: `results/attack_run_2026-11-04_1654_after.md`.
+
+| Family | Broke before | Broke after |
+|---|---|---|
+| evasion | 1 | 1 |
+| false_positive | 6 | 4 |
+| prompt_injection | 2 | 2 |
+| malformed | 3 | 2 |
+| flood_same_creator | 0 | 0 |
+| total | 12 | 9 |
+
+| ID | Family | Targeting | Status | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | unsure | 0.413 | HELD |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | unsure | 0.385 | HELD |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | unsure | 0.473 | HELD |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | unsure | 0.637 | HELD |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | human | 0.240 | BROKE |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | unsure | 0.409 | HELD |
+| EV07 | evasion | signal two: padding with punctuation | 200 | unsure | 0.459 | HELD |
+| EV08 | evasion | signal one: text below the token window | 200 | unsure | 0.421 | HELD |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | unsure | 0.504 | HELD |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | ai | 0.868 | HELD |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | unsure | 0.568 | HELD |
+| FP02 | false_positive | human writing in a formal register | 200 | ai | 0.792 | BROKE |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | ai | 0.733 | BROKE |
+| FP04 | false_positive | a student essay written to a rubric | 200 | ai | 0.722 | BROKE |
+| FP05 | false_positive | technical documentation written by a person | 200 | ai | 0.842 | BROKE |
+| FP06 | false_positive | a person imitating a formal template | 200 | unsure | 0.640 | HELD |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | unsure | 0.640 | HELD |
+| FP08 | false_positive | very short genuine human submission | 400 | — | — | HELD |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | human | 0.331 | BROKE |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | human | 0.172 | BROKE |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | unsure | 0.515 | HELD |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | unsure | 0.434 | HELD |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | unsure | 0.400 | HELD |
+| PI06 | prompt_injection | instruction plus real human text | 200 | unsure | 0.541 | HELD |
+| MF01 | malformed | text is only whitespace | 400 | — | — | HELD |
+| MF02 | malformed | text is a single character | 400 | — | — | HELD |
+| MF03 | malformed | text is control characters | 400 | — | — | HELD |
+| MF04 | malformed | text is only punctuation | 400 | — | — | HELD |
+| MF05 | malformed | text is a very long single word | 200 | unsure | 0.640 | HELD |
+| MF06 | malformed | text is emoji only | 200 | ai | 0.874 | BROKE |
+| MF07 | malformed | text is right-to-left script | 200 | ai | 0.828 | BROKE |
+| MF08 | malformed | text is 60,000 characters | 400 | — | — | HELD |
+| RQ01 | malformed | no text field at all | 400 | — | — | HELD |
+| RQ02 | malformed | no creator_id | 400 | — | — | HELD |
+| RQ03 | malformed | text is a number | 400 | — | — | HELD |
+| RQ04 | malformed | text is a list | 400 | — | — | HELD |
+| RQ05 | malformed | text is null | 400 | — | — | HELD |
+| RQ06 | malformed | creator_id is an object | 400 | — | — | HELD |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | — | — | HELD |
+| RQ08 | malformed | body is unparseable JSON | 400 | — | — | HELD |
+| RQ09 | malformed | body is empty | 400 | — | — | HELD |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | — | — | HELD |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | — | — | HELD |
+| RQ12 | malformed | deeply nested JSON | 400 | — | — | HELD |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | unsure | 0.360 | HELD |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | unsure | 0.360 | HELD |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | unsure | 0.360 | HELD |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | unsure | 0.360 | HELD |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | unsure | 0.360 | HELD |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
 
 
 **Did it help, and how do I know:**
 
 <!-- Widening the unsure band usually fixes one problem and creates another.
      Reporting that trade honestly is worth full credit. -->
+
+Partly. Broken attacks went from 12 to 9: FP06 and FP07 (real human writing)
+and MF05 (one long fake word) moved from "AI" to "unsure". I know because the
+same attack set gave those three exactly 0.650 before and 0.640 after. The
+only scores that changed were ones my rule had set to exactly 0.35 or 0.65.
+
+The cost: three of my five clear AI texts also moved from "AI" to "unsure",
+so my criteria re-run (`results/run_2026-11-04_1655_after.md`) now catches
+only 1 of 5 clear AI texts instead of 4. Criterion 2's gap dropped slightly
+(0.214 to 0.206, still missed). Criteria 1, 3 and 5 still met. So fewer real
+writers get wrongly accused, and more AI text gets through. I think that's
+the right trade, but the four worst false positives (FP02–FP05) are still
+there, because the signals agree on those and this fix never touches them.
 
 
 
