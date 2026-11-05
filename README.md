@@ -436,12 +436,9 @@ refuses (like a 400 for missing text) are logged as rejections too.
 <!-- Every attack with its outcome and a held-or-broke mark.
      `run_attacks.py --label before` produces the table. -->
 
-How I marked them: evasion broke only if AI text was labelled human (unsure
-isn't an all-clear, so it held). A false positive broke if human writing was
-labelled AI. Prompt injection broke if it got what it was after. Malformed
-input broke if the service gave a confident verdict on junk instead of
-refusing it. The flood held if the limit kicked in. Full detail is in
-`results/attack_run_2026-11-04_1624_before.md`.
+An attack broke if it got what it wanted: AI text called human, human text
+called AI, or junk given a confident label. "Unsure" counts as held. Full
+results: `results/attack_run_2026-11-04_1624_before.md`.
 
 
 | Family | Held | Broke |
@@ -539,12 +536,9 @@ rows.
 **The single worst outcome** — the one I'd least want to explain to a writer
 whose work got caught by it:
 
-FP03: a non-native English speaker writing carefully, labelled AI at 0.73
-(model 0.81, style 0.66). Both signals read careful, plain writing as
-machine-like, so they agreed and my disagreement rule never kicked in. This is
-the exact person my false-positive trace in Milestone 1 was about: someone
-using words they're sure of, with the least room to argue back, told their
-own work was probably AI.
+FP03: someone writing carefully in their second language got called AI
+(0.73). It's the exact person from my Milestone 1 trace, and the one least
+able to argue back.
 
 
 
@@ -562,13 +556,7 @@ own work was probably AI.
 | 4. Appeals recorded; unknown id adds nothing to the log | 10 of 10, log +0 | 10/10, log +1 | 10/10, log +1 | 10/10, log +1 | MISSED |
 | 5. Bad input returns 400, never 500 | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
 
-All three runs came back identical. The model runs with no randomness, so
-the same text gets the same score every time.
-
-Criterion 4: every real appeal landed as `under_review` (10/10 each run), but
-appealing a made-up id added one `rejected` entry to the log each time,
-because unit 8 has me log every refused request. No appeal was recorded for
-the made-up id.
+All three runs were identical: the model has no randomness.
 
 **Real output from one trial** (trial 1 of each), pasted as text:
 
@@ -878,7 +866,42 @@ Criterion 5, from the run log file, produced by `run_eval.py::main`
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
 
+I missed two criteria and twelve attacks broke. They all come from four
+problems.
 
+**1. My "not sure" rule gives sure answers.** Stage: the combining rule and
+the label mapping. When my two signals disagree a lot, the rule is meant to
+put the score in the unsure range. But it sets the score to exactly 0.35 or
+0.65, and those exact numbers count as "human" and "AI". So FP06 and FP07,
+real human writing, got called AI. MF05 broke the same way.
+
+**2. Both signals think careful writing looks like AI.** Stage: signal one
+and signal two. Formal writing, a non-native speaker, a student essay and
+technical docs (FP02–FP05) all use common words and even sentences. Both
+signals score that high, so they agree and nothing catches the mistake. This
+is the false positive I traced in Milestone 1, and it's the worst problem.
+
+**3. Signal two is easy to trick.** Stage: signal two (and signal one for
+PI02). Editing AI text (EV05) or adding a few short sentences to it (PI01,
+PI02) makes the sentence lengths uneven. Signal two reads uneven as human,
+so all three got called human.
+
+**4. The route lets in text that isn't normal writing.** Stage: the route,
+then signal two. Signal two only counts English letters and numbers as
+words. Emoji (MF06) and right-to-left scripts like Arabic (MF07) have none,
+so it scores them as very AI-like. Both got called AI, which would wrongly
+accuse someone writing in another language.
+
+**Criterion 2 missed (gap 0.21, needed 0.30):** signal one told AI and human
+apart well on its own, but signal two barely did. Averaging the two shrank
+the gap, and problem 1 stopped three AI texts from scoring above 0.65.
+
+**Criterion 4 missed (the log grew by 1):** every real appeal was saved.
+But appealing a fake id adds a "rejected" entry, because unit 8 has me log
+every refused request. I'm keeping that logging, so this stays a miss.
+
+**Pattern:** signal two is behind three of the four problems. Problem 1 is
+the easiest to fix: it's one line of code.
 
 ---
 
