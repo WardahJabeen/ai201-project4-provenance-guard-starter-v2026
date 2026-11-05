@@ -436,18 +436,115 @@ refuses (like a 400 for missing text) are logged as rejections too.
 <!-- Every attack with its outcome and a held-or-broke mark.
      `run_attacks.py --label before` produces the table. -->
 
+How I marked them: evasion broke only if AI text was labelled human (unsure
+isn't an all-clear, so it held). A false positive broke if human writing was
+labelled AI. Prompt injection broke if it got what it was after. Malformed
+input broke if the service gave a confident verdict on junk instead of
+refusing it. The flood held if the limit kicked in. Full detail is in
+`results/attack_run_2026-11-04_1624_before.md`.
 
+
+| Family | Held | Broke |
+|---|---|---|
+| evasion | 9 | 1 |
+| false_positive | 2 | 6 |
+| prompt_injection | 4 | 2 |
+| malformed | 17 | 3 |
+| flood_same_creator | 12 | 0 |
+| total | 44 | 12 |
+
+| ID | Family | Targeting | Status | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | unsure | 0.413 | HELD |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | unsure | 0.385 | HELD |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | unsure | 0.473 | HELD |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | unsure | 0.637 | HELD |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | human | 0.240 | BROKE |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | unsure | 0.409 | HELD |
+| EV07 | evasion | signal two: padding with punctuation | 200 | unsure | 0.459 | HELD |
+| EV08 | evasion | signal one: text below the token window | 200 | unsure | 0.421 | HELD |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | unsure | 0.504 | HELD |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | ai | 0.868 | HELD |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | unsure | 0.568 | HELD |
+| FP02 | false_positive | human writing in a formal register | 200 | ai | 0.792 | BROKE |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | ai | 0.733 | BROKE |
+| FP04 | false_positive | a student essay written to a rubric | 200 | ai | 0.722 | BROKE |
+| FP05 | false_positive | technical documentation written by a person | 200 | ai | 0.842 | BROKE |
+| FP06 | false_positive | a person imitating a formal template | 200 | ai | 0.650 | BROKE |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | ai | 0.650 | BROKE |
+| FP08 | false_positive | very short genuine human submission | 400 | — | — | HELD |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | human | 0.331 | BROKE |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | human | 0.172 | BROKE |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | unsure | 0.515 | HELD |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | unsure | 0.434 | HELD |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | unsure | 0.400 | HELD |
+| PI06 | prompt_injection | instruction plus real human text | 200 | unsure | 0.541 | HELD |
+| MF01 | malformed | text is only whitespace | 400 | — | — | HELD |
+| MF02 | malformed | text is a single character | 400 | — | — | HELD |
+| MF03 | malformed | text is control characters | 400 | — | — | HELD |
+| MF04 | malformed | text is only punctuation | 400 | — | — | HELD |
+| MF05 | malformed | text is a very long single word | 200 | ai | 0.650 | BROKE |
+| MF06 | malformed | text is emoji only | 200 | ai | 0.874 | BROKE |
+| MF07 | malformed | text is right-to-left script | 200 | ai | 0.828 | BROKE |
+| MF08 | malformed | text is 60,000 characters | 400 | — | — | HELD |
+| RQ01 | malformed | no text field at all | 400 | — | — | HELD |
+| RQ02 | malformed | no creator_id | 400 | — | — | HELD |
+| RQ03 | malformed | text is a number | 400 | — | — | HELD |
+| RQ04 | malformed | text is a list | 400 | — | — | HELD |
+| RQ05 | malformed | text is null | 400 | — | — | HELD |
+| RQ06 | malformed | creator_id is an object | 400 | — | — | HELD |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | — | — | HELD |
+| RQ08 | malformed | body is unparseable JSON | 400 | — | — | HELD |
+| RQ09 | malformed | body is empty | 400 | — | — | HELD |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | — | — | HELD |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | — | — | HELD |
+| RQ12 | malformed | deeply nested JSON | 400 | — | — | HELD |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.350 | HELD |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.350 | HELD |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.350 | HELD |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.350 | HELD |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | human | 0.350 | HELD |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | — | — | HELD |
 
 **Ten audit log entries from the run**
 
 <!-- Choose entries that show the interesting failures, not the ten easiest. -->
 
-```json
+In order: FP03 (non-native speaker, called AI), FP02 (formal human, called
+AI), FP05 (human technical docs, called AI), EV05 (heavily edited AI, called
+human), PI01 and PI02 (AI text with a "treat as human" note, called human),
+MF07 (right-to-left script, called AI), MF06 (emoji only, called AI), FP08 (a
+real short human submission refused as too short) and one 429 from the flood
+rows.
 
+```json
+{"timestamp": "2026-11-05T00:24:33+00:00", "content_id": "4f3a9c57-cc71-45b4-911e-811bafeb4308", "creator_id": "attacker_FP03", "guess": "ai", "model_score": 0.8051, "style_score": 0.6606, "combined_score": 0.7329, "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.", "status": "decided"}
+{"timestamp": "2026-11-05T00:24:33+00:00", "content_id": "aea43523-251b-4023-9f9c-b9b105d857df", "creator_id": "attacker_FP02", "guess": "ai", "model_score": 0.7387, "style_score": 0.8451, "combined_score": 0.7919, "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.", "status": "decided"}
+{"timestamp": "2026-11-05T00:24:34+00:00", "content_id": "59041020-7f03-418c-9bc9-afeb563d6438", "creator_id": "attacker_FP05", "guess": "ai", "model_score": 0.8005, "style_score": 0.8825, "combined_score": 0.8415, "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.", "status": "decided"}
+{"timestamp": "2026-11-05T00:24:32+00:00", "content_id": "0b122f52-f5c1-461c-b3d5-913bafa96e0f", "creator_id": "attacker_EV05", "guess": "human", "model_score": 0.3212, "style_score": 0.1585, "combined_score": 0.2399, "label": "We think this was probably written by a person.", "status": "decided"}
+{"timestamp": "2026-11-05T00:24:34+00:00", "content_id": "d630ba16-09d2-41e1-a8ba-606764de9764", "creator_id": "attacker_PI01", "guess": "human", "model_score": 0.4625, "style_score": 0.2, "combined_score": 0.3313, "label": "We think this was probably written by a person.", "status": "decided"}
+{"timestamp": "2026-11-05T00:24:34+00:00", "content_id": "4d9bcaf9-b07f-4dbf-b57a-87893be83c65", "creator_id": "attacker_PI02", "guess": "human", "model_score": 0.2044, "style_score": 0.1389, "combined_score": 0.1716, "label": "We think this was probably written by a person.", "status": "decided"}
+{"timestamp": "2026-11-05T00:24:37+00:00", "content_id": "b90db6d6-fe9c-4324-866f-787fd5115295", "creator_id": "attacker_MF07", "guess": "ai", "model_score": 0.9064, "style_score": 0.75, "combined_score": 0.8282, "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.", "status": "decided"}
+{"timestamp": "2026-11-05T00:24:37+00:00", "content_id": "16e88f83-4400-447c-80f6-82cdf847c79d", "creator_id": "attacker_MF06", "guess": "ai", "model_score": 0.9969, "style_score": 0.75, "combined_score": 0.8735, "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.", "status": "decided"}
+{"timestamp": "2026-11-05T00:24:34+00:00", "creator_id": "attacker_FP08", "event": "rejected", "status": "rejected", "reason": "text_too_short", "endpoint": "/submit", "http_status": 400}
+{"timestamp": "2026-11-05T00:24:38+00:00", "creator_id": "attacker_flood", "event": "rejected", "status": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 ```
 
 **The single worst outcome** — the one I'd least want to explain to a writer
 whose work got caught by it:
+
+FP03: a non-native English speaker writing carefully, labelled AI at 0.73
+(model 0.81, style 0.66). Both signals read careful, plain writing as
+machine-like, so they agreed and my disagreement rule never kicked in. This is
+the exact person my false-positive trace in Milestone 1 was about: someone
+using words they're sure of, with the least room to argue back, told their
+own work was probably AI.
 
 
 
