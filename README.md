@@ -556,17 +556,310 @@ own work was probably AI.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. My own writing labelled AI | ≤ 1 of 10 | 1/10 | 1/10 | 1/10 | MET |
+| 2. Gap between clear AI and clear human averages | ≥ 0.30 | 0.21 | 0.21 | 0.21 | MISSED |
+| 3. All three labels reachable | 3 of 3 | 3/3 | 3/3 | 3/3 | MET |
+| 4. Appeals recorded; unknown id adds nothing to the log | 10 of 10, log +0 | 10/10, log +1 | 10/10, log +1 | 10/10, log +1 | MISSED |
+| 5. Bad input returns 400, never 500 | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+All three runs came back identical. The model runs with no randomness, so
+the same text gets the same score every time.
+
+Criterion 4: every real appeal landed as `under_review` (10/10 each run), but
+appealing a made-up id added one `rejected` entry to the log each time,
+because unit 8 has me log every refused request. No appeal was recorded for
+the made-up id.
+
+**Real output from one trial** (trial 1 of each), pasted as text:
+
+Criterion 1, from `results/run_2026-11-04_1645_before.md`, produced by
+`run_eval.py::main` (scenario "my own writing"):
 
 ```json
+[
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.35,
+    "model_score": 0.5185,
+    "style_score": 0.1475,
+    "label": "We think this was probably written by a person.",
+    "sent": "Technology has always intrigued me, be it a television remote, a cell "
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.3947,
+    "model_score": 0.6808,
+    "style_score": 0.1085,
+    "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+    "sent": "I excitedly searched the house for a screwdriver and tried to open the"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.6632,
+    "model_score": 0.703,
+    "style_score": 0.6234,
+    "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.",
+    "sent": "After tinkering and some simple trial and error, I found that one of t"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.3888,
+    "model_score": 0.1557,
+    "style_score": 0.6218,
+    "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+    "sent": "What started as a love for hardware would extend to an appreciation of"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.3998,
+    "model_score": 0.3915,
+    "style_score": 0.4081,
+    "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+    "sent": "In an effort to translate my passion for technology into a career, I\u2019v"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.1798,
+    "model_score": 0.0678,
+    "style_score": 0.2918,
+    "label": "We think this was probably written by a person.",
+    "sent": "where did we get the idea to use even sentences for AI label? I feel l"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.35,
+    "model_score": 0.1288,
+    "style_score": 0.4352,
+    "label": "We think this was probably written by a person.",
+    "sent": "also for readme not sure what you mean by you vs I? is that what AI us"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.4264,
+    "model_score": 0.6029,
+    "style_score": 0.25,
+    "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+    "sent": "Could you please replace this one with something longer?"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.2507,
+    "model_score": 0.1871,
+    "style_score": 0.3143,
+    "label": "We think this was probably written by a person.",
+    "sent": "Could you take out some of my text from the chat history (not the dire"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.3951,
+    "model_score": 0.2614,
+    "style_score": 0.5287,
+    "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+    "sent": "One of the recent codepath assignment was pretty interesting. We basic"
+  }
+]
+```
 
+Criterion 2, same file and function (scenario "clear AI"; the clear human
+group is pieces 1–5 of criterion 1 above, averaging 0.44):
+
+```json
+[
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8395,
+    "model_score": 0.8864,
+    "style_score": 0.7926,
+    "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.",
+    "sent": "The implementation of the proposed framework requires careful consider"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.65,
+    "model_score": 0.8209,
+    "style_score": 0.5119,
+    "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.",
+    "sent": "Effective time management is essential for achieving success in both p"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.65,
+    "model_score": 0.9185,
+    "style_score": 0.5507,
+    "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.",
+    "sent": "Climate change represents one of the most significant challenges facin"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.65,
+    "model_score": 0.9213,
+    "style_score": 0.5092,
+    "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.",
+    "sent": "Artificial intelligence has the potential to transform a wide range of"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.4753,
+    "model_score": 0.8665,
+    "style_score": 0.084,
+    "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+    "sent": "Great question! Learning a new language can be a rewarding experience."
+  }
+]
+```
+
+Criterion 3, same file and function (scenario "label coverage"):
+
+```json
+[
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8395,
+    "model_score": 0.8864,
+    "style_score": 0.7926,
+    "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.",
+    "sent": "The implementation of the proposed framework requires careful consider"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.2451,
+    "model_score": 0.2076,
+    "style_score": 0.2826,
+    "label": "We think this was probably written by a person.",
+    "sent": "Pick one public community with lots of text and real variation in qual"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.4404,
+    "model_score": 0.4304,
+    "style_score": 0.4504,
+    "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.",
+    "sent": "It seems like I have uncommited files. I can't remember if its the lat"
+  },
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.2083,
+    "model_score": 0.1672,
+    "style_score": 0.2495,
+    "label": "We think this was probably written by a person.",
+    "sent": "Being wrongly accused of using AI can really hurt a writer, while a bi"
+  }
+]
+```
+
+Criterion 4, from `results/appeals_2026-11-04_1646_before.md`, produced by
+`eval_appeals.py::main`. `run_eval.py` only sends `/submit`, so I extended
+the eval with this script to submit, appeal and read the log back:
+
+```json
+{
+  "appeals": [
+    {
+      "submit_status": 200,
+      "content_id": "5f0377e2-ed71-4920-b50e-a5bd3805a2b4",
+      "appeal_status": 200,
+      "appeal_response": {
+        "content_id": "5f0377e2-ed71-4920-b50e-a5bd3805a2b4",
+        "message": "Thanks, we've received your appeal. A person will review your writing.",
+        "status": "under_review"
+      },
+      "appeal_in_log_as_under_review": true
+    },
+    "... 9 more, all the same shape ..."
+  ],
+  "unknown_id": {
+    "status": 404,
+    "response": {
+      "error": "unknown_content_id",
+      "message": "We couldn't find a submission with that content_id. Please check it matches your result."
+    },
+    "log_entries_added": 1,
+    "entries_added": [
+      {
+        "creator_id": "unknown",
+        "endpoint": "/appeal",
+        "event": "rejected",
+        "http_status": 404,
+        "reason": "unknown_content_id",
+        "status": "rejected",
+        "timestamp": "2026-11-05T00:46:03+00:00"
+      }
+    ],
+    "appeal_recorded_for_made_up_id": false
+  }
+}
+```
+
+Criterion 5, from the run log file, produced by `run_eval.py::main`
+(scenario "bad input"):
+
+```json
+[
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"creator_id\": \"eval_bad_missing\"}"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "(empty text)"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "Too short to score."
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "word word word word word word word word word word word word word word "
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "{\"text\": null, \"creator_id\": \"eval_bad_null\"}"
+  }
+]
 ```
 
 **Diagnoses**
