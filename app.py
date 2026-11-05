@@ -158,7 +158,7 @@ def health():
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
 
 @app.post("/submit")
-# @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
+@limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
     """
     Take a piece of text, decide about it, log the decision, answer.
@@ -261,7 +261,23 @@ def submit():
 
 
 def _error(code: str, message: str, status: int = 400):
-    """Every error has the same shape — see the endpoint contract in README.md."""
+    """
+    Every error has the same shape — see the endpoint contract in README.md.
+
+    Every refusal is logged too, so a flood of bad requests leaves a trace.
+    No `content_id` field on purpose: /appeal looks ids up by it, and a
+    logged rejection mustn't make a made-up id look real.
+    """
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    creator = payload.get("creator_id")
+    audit.log_rejection(
+        creator_id=creator if isinstance(creator, str) and creator.strip() else "unknown",
+        reason=code,
+        endpoint=request.path,
+        http_status=status,
+    )
     return jsonify({"error": code, "message": message}), status
 
 

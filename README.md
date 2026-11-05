@@ -392,7 +392,7 @@ challenged it.
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 30 per day
 
 **Why those numbers and not others:**
 <!-- Think about two people: a real writer submitting their own work a few
@@ -400,17 +400,34 @@ challenged it.
      thresholds. Your numbers have to be liveable for the first and hostile to
      the second. -->
 
+A real writer submits a few times an hour, maybe a few in a row while
+revising especially right before deadline, so 5 a minute and 30 a day should never get in their way. A script
+trying to map my thresholds needs around a thousand variations. At 30 a day
+from one creator, that takes over a month instead of a few minutes. I kept
+the per-minute limit under 15 so a quick burst gets stopped early.
+
 **What a caller counts as:** <!-- per address, or per creator_id? They fail
 differently — one script can look like a thousand callers, and one household
 can look like one. -->
+
+Per `creator_id`, falling back to the caller's address when there isn't one.
+That's fair to a household or school sharing one network, since each writer
+gets their own limit. The weak spot is that the caller chooses their own
+`creator_id`, so a script can make up a new one for every request and never
+hit the limit.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```
-
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
 ```
+
+15 submissions from one creator (`flood_tester`): the first 5 got through and
+the other 10 were blocked. From `results/flood_2026-11-04_1614.md`. Every 429
+also left a `rate_limited` entry in the audit log, and requests my own route
+refuses (like a 400 for missing text) are logged as rejections too.
 
 ---
 
