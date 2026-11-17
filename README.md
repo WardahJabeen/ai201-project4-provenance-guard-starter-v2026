@@ -1163,6 +1163,12 @@ The bad path costs more. A model hang uses the full 10-second time limit, so
 after 3 failures in a row the model is skipped and answers come back in about
 1 ms.
 
+For a hundred people a day, each submitting once, it would cost about 71
+seconds of CPU time a day (100 × 0.709 s = 70.9 s), or 18 seconds of wall
+time (100 × 0.179 s = 17.9 s), plus 11.5 s each time the service starts and
+loads the model. There's still no money cost: the real cost is keeping a
+machine with about 4 GB of free memory switched on all day.
+
 **Run Log**
 
 I ran all five criteria three separate times with `python run_capstone.py
@@ -1271,6 +1277,181 @@ One of those eight in the log:
 ```
 {"timestamp": "2026-11-17T20:25:32+00:00", "content_id": "4bf701bf-7556-4e4f-9046-006e1b1ac6d0", "creator_id": "t1_1221_c5_0", "guess": "unsure", "model_score": null, "style_score": 0.6618, "combined_score": 0.64, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work. Part of our check didn't work this time, so this result is less certain than usual.", "status": "decided", "model_status": "timeout", "degraded": true, "text_chars": 657, "duration_ms": 10007}
 ```
+
+**The Improvement**
+
+The improvement follows criterion 5. It passed before the fix, but every
+writer waited the full 10 seconds, so I tightened it to "at least 4 of 8
+answer in under 1 second". That's the most writers the 4 model workers could
+have kept busy.
+
+Diagnosis: the stage is the queue in front of the model workers,
+`app.py::_ask_model`. The mechanism is that the skip rule only counts a
+failure once it finishes, 10 s later, so all 8 writers passed the skip check
+before any had failed. Each one then queued behind workers that were already
+stuck, and the 10-second limit ran out while it waited in line, even for
+writers that never reached a worker.
+
+The fix, in `app.py::_ask_model`: if all 4 workers are busy and the oldest call
+has been running for more than 2 seconds (`MODEL_STUCK_SECONDS` in
+`config.py`; a normal score takes about 0.2 s), the writer gets the style-only
+answer at once with `model_status: "busy"`, instead of joining the line. Busy
+answers don't count as model failures. Before re-running, I checked that the
+normal path didn't change (42 of 42 checks matched the original code), and that
+a healthy model with 12 writers at once still gave all 12 real `ok` answers in
+0.3 to 0.65 s.
+
+Before the fix (`results/capstone_2026-11-17_1221_trial1.md`, `_1225_trial2`,
+`_1229_trial3`):
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. A failed model still answers, never AI | 9 of 9 | 9/9 | 9/9 | 9/9 | MET |
+| 2. Every request leaves a log line with its timing | 20 of 20 | 20/20 | 20/20 | 20/20 | MET |
+| 3. After 3 failures, answers come straight back | 5 of 5, then a retry | 5/5, retried | 5/5, retried | 5/5, retried | MET |
+| 4. A result that can't be saved is never handed out | 6 of 6, log unchanged | 6/6 | 6/6 | 6/6 | MET |
+| 5. 8 writers at once while the model hangs | 8 of 8 in 12 s or less | 8/8 | 8/8 | 8/8 | MET |
+| 5, tightened | 4+ of 8 under 1 s | 0/8 | 0/8 | 0/8 | MISSED |
+
+After the fix (`results/capstone_2026-11-17_1240_trial1.md`, `_1244_trial2`,
+`_1250_trial3`):
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. A failed model still answers, never AI | 9 of 9 | 9/9 | 9/9 | 9/9 | MET |
+| 2. Every request leaves a log line with its timing | 20 of 20 | 20/20 | 20/20 | 20/20 | MET |
+| 3. After 3 failures, answers come straight back | 5 of 5, then a retry | 5/5, retried | 5/5, retried | 5/5, retried | MET |
+| 4. A result that can't be saved is never handed out | 6 of 6, log unchanged | 6/6 | 6/6 | 6/6 | MET |
+| 5. 8 writers at once while the model hangs | 8 of 8 in 12 s or less | 8/8 | 0/8 | 8/8 | MISSED |
+| 5, tightened | 4+ of 8 under 1 s | 5/8 | 0/8 | 5/8 | MISSED |
+
+Did it help? Yes in runs 1 and 3, where 5 of 8 writers got their answer in
+about 0.03 s instead of 10. Only 3 waited, not 4, because the warm-up's stuck
+call still held the fourth worker. From run 1, made by `app.py::_ask_model`:
+
+```
+- warm-up: 200 timeout in 24.05 s (loads the model, not counted)
+- writer 1: 200 busy in 0.04 s PASS
+- writer 2: 200 busy in 0.03 s PASS
+- writer 3: 200 timeout in 10.03 s PASS
+- writer 4: 200 busy in 0.03 s PASS
+- writer 5: 200 busy in 0.04 s PASS
+- writer 6: 200 busy in 0.02 s PASS
+- writer 7: 200 timeout in 10.02 s PASS
+- writer 8: 200 timeout in 10.02 s PASS
+
+```
+
+One of the busy answers in the log:
+
+```
+{"timestamp": "2026-11-17T20:44:45+00:00", "content_id": "33d2a18d-b450-469d-940f-ca622037411e", "creator_id": "t1_1240_c5_5", "guess": "unsure", "model_score": null, "style_score": 0.5187, "combined_score": 0.5187, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work. Part of our check didn't work this time, so this result is less certain than usual.", "status": "decided", "model_status": "busy", "degraded": true, "text_chars": 523, "duration_ms": 2}
+```
+
+Run 2 missed both versions of criterion 5, for a reason the fix doesn't touch.
+The warm-up failed to load the model (`model_status: "unavailable"`, after
+25.8 s). It's the only load failure in the whole log, and I couldn't reproduce
+it: 5 more loads all worked, in 12.9 to 14.6 s. Then all 8 writers tried to
+load the model themselves, at the same moment. Loading has no time limit (it
+was out of scope), so they waited 17 to 23 seconds before the time limit even
+started:
+
+```
+- warm-up: 200 unavailable in 25.83 s (loads the model, not counted)
+- writer 1: 200 timeout in 23.48 s FAIL
+- writer 2: 200 timeout in 23.19 s FAIL
+- writer 3: 200 busy in 17.18 s FAIL
+- writer 4: 200 busy in 16.77 s FAIL
+- writer 5: 200 timeout in 23.41 s FAIL
+- writer 6: 200 timeout in 22.84 s FAIL
+- writer 7: 200 timeout in 23.41 s FAIL
+- writer 8: 200 busy in 16.85 s FAIL
+
+```
+
+So the stage of this miss is model loading, `detector.py::_load`, called from
+`app.py::_ask_model`. The mechanism is that a failed load leaves no model, and
+every request after it starts its own untimed load. The old code does this
+too, so the fix didn't cause it. But my criterion 5 runs only hit it after the
+fix, so I'm counting it as a miss.
+
+The trade: if the model were healthy but slow, say over 2 seconds a score on a
+slower laptop, a fifth writer arriving at the same moment would now get the
+weaker style-only answer instead of waiting a little for a real score. On this
+laptop, a healthy model never got near that (12 at once, all `ok`).
+
+**What's Still Broken**
+
+Criterion 5 is missed after the fix, in run 2 (see The Improvement). A failed
+model load left every writer to load the model itself, with no time limit.
+I'd load the model once when the service starts, behind a lock, so requests
+never load it and a failed load is retried in one place. I stopped because it's
+a second change, and the unit asks for one, and because I couldn't reproduce
+the load failure to test a fix against it.
+
+The failure's cause is also lost. The log says `unavailable` but not why, and
+my test script threw away the service's error output. I'd add the error
+message to the log line.
+
+The other four were met in all six runs, but some targets were too low:
+
+- Criteria 1, 3 and 4: I'd tested them while building, so they could hardly
+  fail.
+- Criterion 2: allowed a 100 ms gap, but the biggest was 29 ms. I'd tighten it
+  to 50 ms.
+
+Weak spots no criterion covers:
+
+- A stuck model call can't be stopped, because Python can't kill a thread. The
+  fix is running the model in its own process, which was too big for this
+  unit.
+- The style check has no fallback. If it crashes, the writer gets a JSON 500
+  but no result. I left it because it has no model and didn't crash on odd
+  input.
+- Loading the model has no time limit (out of scope).
+
+**What I'd Do Next**
+
+I'd run the model in its own process that loads it once at startup, so a stuck
+call can actually be stopped and a failed load is retried in one place instead
+of by every request. I'd do that first because it's the root of both kinds of
+problem I found: my time limit, skip rule and busy rule all work around stuck
+threads they can't end, and my only miss came from requests loading the model
+themselves.
+
+**How I Used AI**
+
+**Moment 1**
+
+- *What I asked for:* The run path for RUNNING.md: the exact commands to set up
+  and start the service, tested from a fresh clone. Then the "Make it fail on
+  purpose" part rewritten to sound more casual, like a conversation that walks
+  someone through breaking the service and what to expect.
+- *What came back:* The setup and start commands, what the environment needs,
+  and a lock file: testing from a fresh clone found that `requirements.txt`
+  pulled in a newer `regex` that Windows blocked, so it pinned the exact
+  versions in `requirements-lock.txt`. Then a walk-through that starts with
+  the `crash` fault, explains each field in the answer, and has a table of the
+  other faults.
+- *What I changed:* I cleaned up the parts that confused me as I went. I had
+  the run path shortened to numbered steps, kept the original starter notes
+  underneath, and added Mac and Linux commands. In the walk-through, I had
+  lines reworded to point at the command below, added which terminal to press
+  Ctrl+C in, explained what a "fault" is before the table, and put back one
+  paragraph that had become too wordy.
+
+**Moment 2**
+
+- *What I asked for:* The hardening code, a script to run my criteria three
+  times, and a first draft of five criteria.
+- *What came back:* The time limit, style-only fallback, skip rule, log retry
+  and catch-all in `app.py` and `audit.py`, the `AI201_FAULT` switch, and
+  `run_capstone.py`. The first criteria draft had three about hangs.
+- *What I changed:* I swapped criteria until each one tested a different part
+  of the extension: a hang criterion became the logging one. I also had a
+  "why not looser" reason added to criterion 1, and a warm-up added to
+  criterion 5 so the model loading didn't mix into its timing.
+
 
 
 

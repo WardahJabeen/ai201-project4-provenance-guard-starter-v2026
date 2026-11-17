@@ -234,12 +234,17 @@ def criterion_5(tag, sample):
         for t in threads:
             t.join()
         passed = 0
+        quick = 0
         for i, (code, data, secs) in enumerate(results):
             ok = code == 200 and data.get("degraded") is True and secs <= 12
             passed += ok
+            quick += ok and secs < 1
             say(f"- writer {i + 1}: {code} {data.get('model_status')} in {secs:.2f} s {'PASS' if ok else 'FAIL'}")
-    say(f"\nResult: {passed}/8\n")
-    return f"{passed}/8", passed == 8
+    say(f"\nResult: {passed}/8")
+    # Tightened target, set after the first three trials: only 4 workers exist,
+    # so at most 4 writers should wait out the limit; the rest answer < 1 s.
+    say(f"Tightened target: {quick}/8 answered in under 1 s (target: at least 4 of 8)\n")
+    return (f"{passed}/8", passed == 8), (f"{quick}/8 under 1 s", quick >= 4)
 
 
 # ── Run ──────────────────────────────────────────────────────────────────────
@@ -266,7 +271,9 @@ def main():
     )
     rows.append(("3. After 3 failures, answers come straight back", "5 of 5 + retry", *criterion_3(tag, sample)))
     rows.append(("4. Unsaved result never handed out", "6 of 6", *criterion_4(tag, sample, saved_id)))
-    rows.append(("5. 8 writers at once while the model hangs", "8 of 8", *criterion_5(tag, sample)))
+    original, tightened = criterion_5(tag, sample)
+    rows.append(("5. 8 writers at once while the model hangs", "8 of 8", *original))
+    rows.append(("5, tightened: at most 4 of 8 wait out the limit", "4+ of 8 under 1 s", *tightened))
 
     say("## Summary\n")
     say("| Criterion | Target | Result | Met? |")

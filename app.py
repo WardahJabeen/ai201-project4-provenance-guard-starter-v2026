@@ -52,7 +52,14 @@ app = Flask(__name__)
 # The model runs in its own thread so /submit can stop waiting for it. Python
 # can't kill a stuck thread, so a hung score keeps running in the background;
 # the request just stops waiting and answers without it.
-_model_pool = ThreadPoolExecutor(max_workers=4)
+MODEL_WORKERS = 4
+_model_pool = ThreadPoolExecutor(max_workers=MODEL_WORKERS)
+
+# Model calls handed to the pool and not finished yet, with when each started.
+# A call stays here until its thread really ends, even after the request has
+# stopped waiting for it, so this shows how many workers are actually busy.
+_in_flight: dict = {}
+_in_flight_lock = threading.Lock()
 
 # Failures in a row, and when to start asking the model again (see config.py).
 _model_failures = 0
@@ -107,7 +114,8 @@ def _safe_model_signal(text: str) -> tuple[float | None, str]:
 
     Reasons: ok, unavailable (model won't load), timeout, error (crashed),
     bad_score (not a number from 0 to 1), skipped (the model failed too many
-    times in a row, so it isn't asked for a while).
+    times in a row, so it isn't asked for a while), busy (every worker is
+    stuck, so waiting in line would only end in a timeout).
     """
     global _model_failures, _skip_model_until
 
@@ -116,6 +124,9 @@ def _safe_model_signal(text: str) -> tuple[float | None, str]:
             return None, "skipped"
 
     score, status = _ask_model(text)
+    if status == "busy":
+        # The model wasn't asked, so this isn't a model failure.
+        return score, status
 
     with _model_state_lock:
         if status == "ok":
@@ -140,7 +151,24 @@ def _ask_model(text: str) -> tuple[float | None, str]:
     except detector.DetectorUnavailable:
         return None, "unavailable"
 
-    future = _model_pool.submit(detector.model_signal, text)
+    # Capstone improvement: don't queue behind workers that are stuck. If all
+    # of them are busy and the oldest has run far longer than a normal score
+    # (about 0.2 s), this request would only wait out the time limit in line.
+    with _in_flight_lock:
+        now = time.monotonic()
+        if (
+            len(_in_flight) >= MODEL_WORKERS
+            and now - min(_in_flight.values()) > config.MODEL_STUCK_SECONDS
+        ):
+            return None, "busy"
+        future = _model_pool.submit(detector.model_signal, text)
+        _in_flight[future] = now
+
+    def _finished(f):
+        with _in_flight_lock:
+            _in_flight.pop(f, None)
+
+    future.add_done_callback(_finished)
     try:
         score = future.result(timeout=config.DETECTOR_TIMEOUT_SECONDS)
     except FutureTimeout:

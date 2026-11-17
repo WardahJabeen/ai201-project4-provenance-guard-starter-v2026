@@ -57,6 +57,13 @@ DETECTOR_TIMEOUT_SECONDS = float(os.getenv("AI201_DETECTOR_TIMEOUT", "10"))
 MODEL_FAIL_LIMIT = 3
 MODEL_SKIP_SECONDS = 60
 
+# Capstone improvement. When every model worker is busy and the oldest call
+# has run longer than this, the workers are treated as stuck: a new request
+# answers with style only at once (`model_status: "busy"`) instead of waiting
+# in line for the full timeout. A normal score takes about 0.2 s, so 2 s means
+# clearly stuck, while a busy but healthy model still queues as before.
+MODEL_STUCK_SECONDS = 2
+
 # Capstone. Makes the model fail on purpose so the bad path can be tested.
 # Set it before starting the service, e.g. in PowerShell:
 #     $env:AI201_FAULT = "crash"; python app.py
