@@ -33,6 +33,8 @@ anything together:
 import re
 import statistics
 
+import config
+
 
 def sentences(text: str) -> list[str]:
     """Split into sentences. Rough and good enough — given to you."""
@@ -160,6 +162,10 @@ def style_signal(text: str) -> float:
     my sample texts; spread separated them best, punctuation worst (casual
     human writing barely uses any), so the weights follow that.
     """
+    # Capstone: a crash nobody planned for, to test the catch-all in app.py.
+    if config.FAULT == "style":
+        raise RuntimeError("Injected fault: style signal crashed.")
+
     spread = sentence_length_spread(text)
     # One sentence has no spread to judge, so that part sits at neutral.
     spread_ai = 0.5 if spread is None else _ramp(spread, ai=0.20, human=0.60)

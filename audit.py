@@ -114,6 +114,18 @@ def log_rejection(creator_id: str, reason: str, **extra) -> dict:
     })
 
 
+def log_error(error_type: str, detail: str, **extra) -> dict:
+    """Capstone: record a crash nobody planned for, so it isn't invisible."""
+    return _append({
+        "timestamp": _now(),
+        "event": "error",
+        "status": "error",
+        "error_type": error_type,
+        "detail": detail,
+        **extra,
+    })
+
+
 class LogWriteFailed(RuntimeError):
     """The log couldn't be saved, even after a retry."""
 

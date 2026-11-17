@@ -25,12 +25,14 @@ Routes:
 """
 
 import math
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 
 from flask import Flask, g, jsonify, request
+from werkzeug.exceptions import HTTPException
 
 import audit
 import config
@@ -52,6 +54,11 @@ app = Flask(__name__)
 # the request just stops waiting and answers without it.
 _model_pool = ThreadPoolExecutor(max_workers=4)
 
+# Failures in a row, and when to start asking the model again (see config.py).
+_model_failures = 0
+_skip_model_until = 0.0
+_model_state_lock = threading.Lock()
+
 
 @app.before_request
 def _start_timer():
@@ -63,13 +70,70 @@ def _elapsed_ms() -> int:
     return round((time.perf_counter() - start) * 1000)
 
 
+@app.errorhandler(Exception)
+def _unexpected_error(exc):
+    """
+    Any crash nobody planned for. Without this, Flask answers with an HTML
+    page and nothing is logged.
+    """
+    if isinstance(exc, HTTPException):
+        # 404, 405, 429 and friends aren't crashes; leave them as they were.
+        return exc
+
+    payload = request.get_json(silent=True)
+    creator = payload.get("creator_id") if isinstance(payload, dict) else None
+    try:
+        audit.log_error(
+            error_type=type(exc).__name__,
+            detail=str(exc)[:300],
+            creator_id=creator if isinstance(creator, str) and creator.strip() else "unknown",
+            endpoint=request.path,
+            http_status=500,
+            duration_ms=_elapsed_ms(),
+        )
+    except audit.LogWriteFailed as log_exc:
+        app.logger.error("Error not logged: %s", log_exc)
+    app.logger.exception("Unexpected error on %s", request.path)
+
+    return jsonify({
+        "error": "internal_error",
+        "message": "Something went wrong on our side. Please try again in a minute.",
+    }), 500
+
+
 def _safe_model_signal(text: str) -> tuple[float | None, str]:
     """
     The model score, or None and the reason it failed.
 
     Reasons: ok, unavailable (model won't load), timeout, error (crashed),
-    bad_score (not a number from 0 to 1).
+    bad_score (not a number from 0 to 1), skipped (the model failed too many
+    times in a row, so it isn't asked for a while).
     """
+    global _model_failures, _skip_model_until
+
+    with _model_state_lock:
+        if time.monotonic() < _skip_model_until:
+            return None, "skipped"
+
+    score, status = _ask_model(text)
+
+    with _model_state_lock:
+        if status == "ok":
+            _model_failures = 0
+        else:
+            _model_failures += 1
+            if _model_failures >= config.MODEL_FAIL_LIMIT:
+                _skip_model_until = time.monotonic() + config.MODEL_SKIP_SECONDS
+                _model_failures = 0
+                app.logger.warning(
+                    "Model failed %d times in a row; skipping it for %d s",
+                    config.MODEL_FAIL_LIMIT, config.MODEL_SKIP_SECONDS,
+                )
+    return score, status
+
+
+def _ask_model(text: str) -> tuple[float | None, str]:
+    """One try at the model score, with the time limit and the score check."""
     try:
         # Loading is slow the first time (10-20 s), so it isn't timed.
         detector.warm_up()

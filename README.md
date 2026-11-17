@@ -1066,15 +1066,20 @@ forever. The same happens if the log file can't be saved. I'm adding:
 - Catch a model crash or a bad score instead of crashing.
 - A time limit on the model.
 - A style-only result, marked as less certain, when the model fails.
+- After 3 model failures in a row, skip the model for 60 seconds and answer
+  with style only straight away, so a stuck model doesn't make everyone wait.
 - One retry when the log can't be saved, then a clear "try again" instead of
   a result that can't be appealed.
+- Any other crash returns a plain JSON error and is logged, instead of an
+  HTML error page that leaves no trace.
 - A way to trigger each failure on purpose so I can test it.
 - How long each request took, in the log.
 
 Out of scope:
 
 - I'm not changing the scoring, the thresholds, or either signal.
-- I'm not changing rate limiting. It already works.
+- I'm not putting a time limit on loading the model. The first load takes 10
+  to 20 seconds anyway, and a stalled download is hard to fake for testing.
 
 
 

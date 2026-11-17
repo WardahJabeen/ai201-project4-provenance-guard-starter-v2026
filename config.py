@@ -51,6 +51,12 @@ DETECTOR_MAX_TOKENS = 400
 # two once the model is loaded; loading itself isn't timed.
 DETECTOR_TIMEOUT_SECONDS = float(os.getenv("AI201_DETECTOR_TIMEOUT", "10"))
 
+# Capstone. After this many model failures in a row, stop asking the model for
+# MODEL_SKIP_SECONDS and answer with the style signal straight away, so a stuck
+# model doesn't make every writer wait out the full timeout.
+MODEL_FAIL_LIMIT = 3
+MODEL_SKIP_SECONDS = 60
+
 # Capstone. Makes the model fail on purpose so the bad path can be tested.
 # Set it before starting the service, e.g. in PowerShell:
 #     $env:AI201_FAULT = "crash"; python app.py
@@ -60,6 +66,7 @@ DETECTOR_TIMEOUT_SECONDS = float(os.getenv("AI201_DETECTOR_TIMEOUT", "10"))
 #   nan    model_signal returns NaN
 #   range  model_signal returns 1.7, outside 0-1
 #   log    the audit log can't be written
+#   style  the style signal crashes (an error nothing else plans for)
 #
 # Empty (the default) means no fault.
 FAULT = os.getenv("AI201_FAULT", "").strip().lower()
