@@ -1052,6 +1052,25 @@ I'd rather say "unsure" more often than wrongly call someone's work AI. More
 AI writing gets through, so the site pays for it, but that's better than an
 honest writer being accused.
 
+---
+
+## Capstone
+
+**The Shape**
+
+Shape B, harden against failure. I'm extending Provenance Guard. Right now it
+works when the model loads and answers, but if the model crashes partway
+through, hangs, or returns a bad score, the writer gets a 500 or waits
+forever. I'm adding three things: catch a model crash or a bad score instead
+of crashing, put a time limit on the model, and fall back to a style-only
+result marked as less certain when the model fails. I'm also adding a way to
+trigger each failure on purpose so I can test it, and timing in the log.
+
+Out of scope:
+
+- I'm not changing the scoring, the thresholds, or either signal.
+- I'm not handling the log file failing to save. I'm leaving that for later.
+
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
