@@ -1061,18 +1061,20 @@ honest writer being accused.
 Shape B, harden against failure. I'm extending Provenance Guard. Right now it
 works when the model loads and answers, but if the model crashes partway
 through, hangs, or returns a bad score, the writer gets a 500 or waits
-forever. I'm adding:
+forever. The same happens if the log file can't be saved. I'm adding:
 
 - Catch a model crash or a bad score instead of crashing.
 - A time limit on the model.
 - A style-only result, marked as less certain, when the model fails.
+- One retry when the log can't be saved, then a clear "try again" instead of
+  a result that can't be appealed.
 - A way to trigger each failure on purpose so I can test it.
 - How long each request took, in the log.
 
 Out of scope:
 
 - I'm not changing the scoring, the thresholds, or either signal.
-- I'm not handling the log file failing to save. I'm leaving that for later.
+- I'm not changing rate limiting. It already works.
 
 
 

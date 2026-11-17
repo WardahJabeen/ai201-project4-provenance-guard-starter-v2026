@@ -59,6 +59,7 @@ DETECTOR_TIMEOUT_SECONDS = float(os.getenv("AI201_DETECTOR_TIMEOUT", "10"))
 #   hang   model_signal sleeps for FAULT_HANG_SECONDS (longer than the timeout)
 #   nan    model_signal returns NaN
 #   range  model_signal returns 1.7, outside 0-1
+#   log    the audit log can't be written
 #
 # Empty (the default) means no fault.
 FAULT = os.getenv("AI201_FAULT", "").strip().lower()

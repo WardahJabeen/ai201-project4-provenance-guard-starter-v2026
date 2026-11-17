@@ -163,12 +163,15 @@ if config.RATE_LIMITING_ENABLED:
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             payload = {}
-        audit.log_rejection(
-            creator_id=payload.get("creator_id", "unknown"),
-            reason="rate_limited",
-            limit=str(exc.description),
-            duration_ms=_elapsed_ms(),
-        )
+        try:
+            audit.log_rejection(
+                creator_id=payload.get("creator_id", "unknown"),
+                reason="rate_limited",
+                limit=str(exc.description),
+                duration_ms=_elapsed_ms(),
+            )
+        except audit.LogWriteFailed as log_exc:
+            app.logger.error("Rate-limit rejection not logged: %s", log_exc)
         return jsonify({
             "error": "rate_limited",
             "message": "Too many submissions. Try again shortly.",
@@ -304,19 +307,28 @@ def submit():
             " certain than usual."
         )
 
-    audit.log_decision(
-        content_id=content_id,
-        creator_id=creator_id,
-        guess=guess,
-        model_score=model_score,
-        style_score=style_score,
-        combined_score=confidence,
-        label=label,
-        model_status=model_status,
-        degraded=degraded,
-        text_chars=len(text),
-        duration_ms=_elapsed_ms(),
-    )
+    try:
+        audit.log_decision(
+            content_id=content_id,
+            creator_id=creator_id,
+            guess=guess,
+            model_score=model_score,
+            style_score=style_score,
+            combined_score=confidence,
+            label=label,
+            model_status=model_status,
+            degraded=degraded,
+            text_chars=len(text),
+            duration_ms=_elapsed_ms(),
+        )
+    except audit.LogWriteFailed:
+        # Capstone: /appeal finds a submission through the log, so a result
+        # that wasn't saved could never be appealed. Don't hand one out.
+        return _error(
+            "log_unavailable",
+            "We couldn't save your result, so we haven't given one. Please try again in a minute.",
+            503,
+        )
 
     return jsonify({
         "content_id": content_id,
@@ -342,13 +354,18 @@ def _error(code: str, message: str, status: int = 400):
     if not isinstance(payload, dict):
         payload = {}
     creator = payload.get("creator_id")
-    audit.log_rejection(
-        creator_id=creator if isinstance(creator, str) and creator.strip() else "unknown",
-        reason=code,
-        endpoint=request.path,
-        http_status=status,
-        duration_ms=_elapsed_ms(),
-    )
+    try:
+        audit.log_rejection(
+            creator_id=creator if isinstance(creator, str) and creator.strip() else "unknown",
+            reason=code,
+            endpoint=request.path,
+            http_status=status,
+            duration_ms=_elapsed_ms(),
+        )
+    except audit.LogWriteFailed as exc:
+        # The refusal still goes out; losing its trace is worse than nothing,
+        # but crashing here would turn a 400 into a 500.
+        app.logger.error("Rejection not logged: %s", exc)
     return jsonify({"error": code, "message": message}), status
 
 
@@ -394,12 +411,21 @@ def appeal():
         )
 
     # The appeal is filed under the creator of the original submission.
-    audit.log_appeal(
-        content_id=content_id,
-        creator_id=entries[0].get("creator_id", "unknown"),
-        reasoning=reasoning.strip(),
-        duration_ms=_elapsed_ms(),
-    )
+    try:
+        audit.log_appeal(
+            content_id=content_id,
+            creator_id=entries[0].get("creator_id", "unknown"),
+            reasoning=reasoning.strip(),
+            duration_ms=_elapsed_ms(),
+        )
+    except audit.LogWriteFailed:
+        # Capstone: an appeal that wasn't saved would never be reviewed, so
+        # don't tell the writer it was received.
+        return _error(
+            "log_unavailable",
+            "We couldn't save your appeal. Please try again in a minute.",
+            503,
+        )
 
     return jsonify({
         "content_id": content_id,

@@ -21,6 +21,7 @@ and the one you most want to compare is the one from before the change.
 
 import json
 import threading
+import time
 from datetime import datetime, timezone
 
 import config
@@ -113,13 +114,27 @@ def log_rejection(creator_id: str, reason: str, **extra) -> dict:
     })
 
 
+class LogWriteFailed(RuntimeError):
+    """The log couldn't be saved, even after a retry."""
+
+
 def _append(entry: dict) -> dict:
-    config.LOG_DIR.mkdir(parents=True, exist_ok=True)
     line = json.dumps(entry, ensure_ascii=False)
-    with _lock:
-        with config.AUDIT_LOG.open("a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    return entry
+    # Capstone: try twice. A file locked for a moment (antivirus, an editor
+    # with it open) often frees up a split second later.
+    for attempt in range(2):
+        try:
+            if config.FAULT == "log":
+                raise OSError("Injected fault: log file can't be written.")
+            config.LOG_DIR.mkdir(parents=True, exist_ok=True)
+            with _lock:
+                with config.AUDIT_LOG.open("a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+            return entry
+        except OSError as exc:
+            if attempt == 1:
+                raise LogWriteFailed(f"Couldn't write {config.AUDIT_LOG}: {exc}") from exc
+            time.sleep(0.2)
 
 
 def read_entries(limit: int | None = None) -> list[dict]:
