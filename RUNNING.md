@@ -1,6 +1,66 @@
 # Running Provenance Guard
 
-Everything about how the starter works.
+## Capstone: run it locally (Path B)
+
+Runs on my machine only. It uses a local model (gpt2 + torch), which needs more
+memory than a free host gives. Commands are for PowerShell.
+
+**1. Set up (once)**
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements-lock.txt
+python detector.py
+```
+
+Use `requirements-lock.txt`, not `requirements.txt`. It has the exact versions
+I tested with. With `requirements.txt`, a fresh install got a newer `regex`
+that Windows blocked, so the model wouldn't load.
+
+**2. Start it**
+
+```powershell
+python app.py
+```
+
+Runs on `http://127.0.0.1:5000`. The first submission takes about 12 seconds
+while the model loads.
+
+**3. Check it** (second terminal)
+
+```powershell
+curl.exe -X POST http://127.0.0.1:5000/ping -H "Content-Type: application/json" -d '{\"message\": \"hello\"}'
+```
+
+**4. Make it fail on purpose**
+
+```powershell
+$env:AI201_FAULT = "hang"; python app.py
+```
+
+- `AI201_FAULT`: `crash`, `hang`, `nan`, `range`, `log` or `style`.
+- `AI201_DETECTOR_TIMEOUT`: seconds the model gets (default 10).
+- Turn it off: `Remove-Item Env:AI201_FAULT`
+
+**Logs:** every request adds a line to `logs/audit.jsonl` with the time, what
+came in, what went out and `duration_ms`. See it at `GET /log`.
+
+**Needs**
+
+- Python 3.11 to 3.13 (tested on 3.13.15, Windows 11), about 4 GB free RAM.
+- Model: `gpt2`, about 526 MB, downloaded by `python detector.py`. No API key.
+- Packages: exact versions in `requirements-lock.txt`. Main ones: Flask 3.1.3,
+  Flask-Limiter 3.12, requests 2.34.2, transformers 4.57.6, torch 2.14.1 (CPU),
+  gunicorn 23.0.0, certifi 2026.10.23.
+
+**Tested from a clean checkout** on 2026-11-17: new clone, new venv, steps 1
+to 3. `test.py` passed, `/ping` answered, and `/submit` gave the same scores as
+my working copy.
+
+---
+
+Everything below is about how the starter works.
 
 This is a **web service**. It runs on your machine and you talk to it with
 `curl` from another terminal. If you've not built a backend before, that's
