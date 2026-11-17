@@ -1081,6 +1081,88 @@ Out of scope:
 - I'm not putting a time limit on loading the model. The first load takes 10
   to 20 seconds anyway, and a stalled download is hard to fake for testing.
 
+**Instrumentation**
+
+Every request adds one JSON line to `logs/audit.jsonl`: decisions, appeals,
+rejected input and crashes. Each line has named fields:
+
+- `timestamp`: when it happened.
+- What came in: `creator_id` and `text_chars`.
+- What went out: `guess`, `model_score`, `style_score`, `combined_score` and
+  `label`, or `reason` and `http_status` when it was refused.
+- `duration_ms`: how long the request took.
+- `model_status` and `degraded`: whether the model worked (`ok`) or failed
+  (`error`, `timeout`, `bad_score`, `unavailable`, `skipped`), and whether the
+  answer came from the style check alone.
+
+These 16 entries come from one session on 2026-11-17: a warm-up, the 10 timed
+runs below, an appeal, then four failures on purpose (text too short, model
+crash, model hang, style check crash).
+
+```
+{"timestamp": "2026-11-17T20:00:32+00:00", "content_id": "99c42c17-e4cb-4973-b289-aad337fcd065", "creator_id": "cost2_warmup", "guess": "unsure", "model_score": 0.1635, "style_score": 0.6618, "combined_score": 0.4127, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 657, "duration_ms": 11534}
+{"timestamp": "2026-11-17T20:00:33+00:00", "content_id": "cc89d912-f051-4040-88e9-86fb5aac565b", "creator_id": "cost2_run_01", "guess": "unsure", "model_score": 0.1635, "style_score": 0.6618, "combined_score": 0.4127, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 657, "duration_ms": 183}
+{"timestamp": "2026-11-17T20:00:33+00:00", "content_id": "31fc84d1-5e41-4212-bb9f-d8a078fa02d5", "creator_id": "cost2_run_02", "guess": "unsure", "model_score": 0.6662, "style_score": 0.2807, "combined_score": 0.4735, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 775, "duration_ms": 220}
+{"timestamp": "2026-11-17T20:00:33+00:00", "content_id": "b4e34744-5a8a-4b85-973e-9b1529b8c228", "creator_id": "cost2_run_03", "guess": "human", "model_score": 0.3212, "style_score": 0.1585, "combined_score": 0.2399, "label": "We think this was probably written by a person.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 460, "duration_ms": 165}
+{"timestamp": "2026-11-17T20:00:33+00:00", "content_id": "30862124-15ae-4b3a-847f-f9044e03ac79", "creator_id": "cost2_run_04", "guess": "unsure", "model_score": 0.5862, "style_score": 0.3319, "combined_score": 0.4591, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 749, "duration_ms": 201}
+{"timestamp": "2026-11-17T20:00:33+00:00", "content_id": "b06daceb-326f-482a-969b-e57f2b66b74f", "creator_id": "cost2_run_05", "guess": "unsure", "model_score": 0.7042, "style_score": 0.303, "combined_score": 0.5036, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 805, "duration_ms": 220}
+{"timestamp": "2026-11-17T20:00:34+00:00", "content_id": "81f98348-9d05-4070-8be8-f285488e7989", "creator_id": "cost2_run_06", "guess": "unsure", "model_score": 0.6175, "style_score": 0.5187, "combined_score": 0.5681, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 523, "duration_ms": 186}
+{"timestamp": "2026-11-17T20:00:34+00:00", "content_id": "d355efbd-b0a4-4eb9-841a-249edaf9c7b6", "creator_id": "cost2_run_07", "guess": "ai", "model_score": 0.8051, "style_score": 0.6606, "combined_score": 0.7329, "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 418, "duration_ms": 174}
+{"timestamp": "2026-11-17T20:00:34+00:00", "content_id": "f45ab840-1832-4ef5-bf9e-2af37f8cd7f7", "creator_id": "cost2_run_08", "guess": "ai", "model_score": 0.8005, "style_score": 0.8825, "combined_score": 0.8415, "label": "We think this was probably written with help from AI. Our check can get this wrong, especially with plain or simple writing. If you wrote it yourself, you can ask for a person to review it.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 393, "duration_ms": 144}
+{"timestamp": "2026-11-17T20:00:34+00:00", "content_id": "9c6352a4-269b-4a52-9460-93f51a6bd309", "creator_id": "cost2_run_09", "guess": "unsure", "model_score": 0.8816, "style_score": 0.4653, "combined_score": 0.64, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 335, "duration_ms": 135}
+{"timestamp": "2026-11-17T20:00:34+00:00", "content_id": "69624580-2663-400a-936f-867e019a47b4", "creator_id": "cost2_run_10", "guess": "human", "model_score": 0.2044, "style_score": 0.1389, "combined_score": 0.1716, "label": "We think this was probably written by a person.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 322, "duration_ms": 109}
+{"timestamp": "2026-11-17T20:00:34+00:00", "content_id": "69624580-2663-400a-936f-867e019a47b4", "creator_id": "cost2_run_10", "event": "appeal", "status": "under_review", "reasoning": "I wrote this myself for class.", "duration_ms": 3}
+{"timestamp": "2026-11-17T20:00:34+00:00", "creator_id": "cost2_fail_short", "event": "rejected", "status": "rejected", "reason": "text_too_short", "endpoint": "/submit", "http_status": 400, "duration_ms": 1}
+{"timestamp": "2026-11-17T20:00:34+00:00", "content_id": "2fc1ea65-e62b-4de9-9260-10bd2b198168", "creator_id": "cost2_fail_crash", "guess": "human", "model_score": null, "style_score": 0.2807, "combined_score": 0.2807, "label": "We think this was probably written by a person. Part of our check didn't work this time, so this result is less certain than usual.", "status": "decided", "model_status": "error", "degraded": true, "text_chars": 775, "duration_ms": 1}
+{"timestamp": "2026-11-17T20:00:44+00:00", "content_id": "d916a380-2b47-46c7-b25b-52a6ed7000fa", "creator_id": "cost2_fail_hang", "guess": "human", "model_score": null, "style_score": 0.1585, "combined_score": 0.1585, "label": "We think this was probably written by a person. Part of our check didn't work this time, so this result is less certain than usual.", "status": "decided", "model_status": "timeout", "degraded": true, "text_chars": 460, "duration_ms": 10006}
+{"timestamp": "2026-11-17T20:00:44+00:00", "event": "error", "status": "error", "error_type": "RuntimeError", "detail": "Injected fault: style signal crashed.", "creator_id": "cost2_fail_style", "endpoint": "/submit", "http_status": 500, "duration_ms": 237}
+```
+
+The last four are the failed runs:
+
+- `cost2_fail_short`: rejected with a 400, logged with its reason.
+- `cost2_fail_crash`: the model crashed, so the answer came from style alone
+  (`model_status: "error"`).
+- `cost2_fail_hang`: the model hung, so the request gave up after 10 seconds
+  and used style alone (`"timeout"`, `duration_ms: 10006`).
+- `cost2_fail_style`: an unplanned crash, logged as `event: "error"` and
+  answered with a JSON 500.
+
+**What It Costs**
+
+One run costs about 0.18 seconds of wall time, or about 0.71 seconds of CPU
+time, on my laptop. There's no money cost, because there's no API: the model
+runs locally.
+
+| | Average of 10 runs | Range |
+|---|---|---|
+| Wall time, measured by the client | 0.179 s | 0.112 to 0.223 s |
+| Wall time, `duration_ms` in the log | 174 ms | 109 to 220 ms |
+| CPU time | 0.709 s | 0.438 to 0.953 s |
+
+CPU time is higher than wall time because torch uses several CPU cores at once.
+
+How I measured it:
+
+1. I started the service and sent one warm-up request first. Loading the model
+   took 11.5 seconds. That happens once per start, so I left it out of the
+   average.
+2. I sent 10 submissions, from 322 to 805 characters, taken from the attack
+   set.
+3. For each one, I timed the request from the client, and read Python's
+   `time.process_time()` before and after for CPU time. The service and the
+   client ran in the same process, so that's the CPU used by the service. I
+   also averaged `duration_ms` from the 10 log entries.
+
+Longer text costs more: the 805-character run took 220 ms and the
+322-character one took 109 ms. The timing also changes with what else the
+laptop is doing. An earlier attempt the same day, cut short when one of its
+texts was rejected, took 0.23 to 0.51 seconds for its first eight runs.
+
+The bad path costs more. A model hang uses the full 10-second time limit, so
+after 3 failures in a row the model is skipped and answers come back in about
+1 ms.
+
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
