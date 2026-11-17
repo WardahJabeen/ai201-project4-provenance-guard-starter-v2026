@@ -2,25 +2,29 @@
 
 ## Capstone: run it locally (Path B)
 
-Runs on my machine only. It uses a local model (gpt2 + torch), which needs more
-memory than a free host gives. Commands are for PowerShell.
+Each step shows Windows (PowerShell) and Mac/Linux.
 
 **1. Set up (once)**
 
 ```powershell
+# Windows
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements-lock.txt
 python detector.py
 ```
 
-Use `requirements-lock.txt`, not `requirements.txt`. It has the exact versions
-I tested with. With `requirements.txt`, a fresh install got a newer `regex`
-that Windows blocked, so the model wouldn't load.
+```bash
+# Mac/Linux
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-lock.txt
+python detector.py
+```
 
-**2. Start it**
+**2. Start it** (same on all systems, with the venv active)
 
-```powershell
+```bash
 python app.py
 ```
 
@@ -30,21 +34,121 @@ while the model loads.
 **3. Check it** (second terminal)
 
 ```powershell
+# Windows
 curl.exe -X POST http://127.0.0.1:5000/ping -H "Content-Type: application/json" -d '{\"message\": \"hello\"}'
+```
+
+```bash
+# Mac/Linux
+curl -X POST http://127.0.0.1:5000/ping -H "Content-Type: application/json" -d '{"message": "hello"}'
 ```
 
 **4. Make it fail on purpose**
 
+This is the fun part. You're going to break the service on purpose and watch it cope.
+
+You'll use the same two terminals as before. The first one runs the service, and the second one sends it requests. Start off with Ctrl-C on both terminals to stop any service running.
+
+We'll start with `crash`, which makes the model throw an error. Run the command below to start it again with the crash switched on:
+
 ```powershell
+# Windows
+$env:AI201_FAULT = "crash"; python app.py
+```
+
+```bash
+# Mac/Linux
+AI201_FAULT=crash python app.py
+```
+
+Next, go to your second terminal and paste the command below. It sends the service a short piece of writing:
+
+```powershell
+# Windows
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{\"text\": \"I walked to the market this morning and bought some apples. The weather was cold but bright.\", \"creator_id\": \"me\"}'
+```
+
+```bash
+# Mac/Linux
+curl -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{"text": "I walked to the market this morning and bought some apples. The weather was cold but bright.", "creator_id": "me"}'
+```
+
+Even though the model just crashed, you still get an answer. Look for these in it:
+
+- `"model_status": "error"`, meaning the model failed.
+- `"model_score": null`, because there's no model score this time.
+- `"degraded": true`, meaning this answer came from the style check alone.
+- The label ends with "Part of our check didn't work this time...". So the
+  writer knows it's less certain.
+- `"guess"` is `human` or `unsure`, never `ai`. One check on its own isn't
+  enough to accuse anyone.
+
+Want to try another one? Press Ctrl+C in the first terminal, then run the same start command there with a different word in place of `crash`. For example, this one
+starts it with `hang`:
+
+```powershell
+# Windows
 $env:AI201_FAULT = "hang"; python app.py
 ```
 
-- `AI201_FAULT`: `crash`, `hang`, `nan`, `range`, `log` or `style`.
-- `AI201_DETECTOR_TIMEOUT`: seconds the model gets (default 10).
-- Turn it off: `Remove-Item Env:AI201_FAULT`
+```bash
+# Mac/Linux
+AI201_FAULT=hang python app.py
+```
 
-**Logs:** every request adds a line to `logs/audit.jsonl` with the time, what
-came in, what went out and `duration_ms`. See it at `GET /log`.
+Then paste the same submit command from above into your second terminal.
+
+There are six of these switches in total, each one breaking a different part of the service. `crash` and `hang` are two of them. In the table below, the first column is the word you put in the start command, and the last column is what you should get back:
+
+| Fault | What breaks | What you should see |
+|---|---|---|
+| `crash` | The model throws an error | An answer, with `"model_status": "error"` |
+| `hang` | The model gets stuck | The answer takes about 10 seconds, then `"model_status": "timeout"` |
+| `nan` | The model returns nonsense (not a number) | An answer, with `"model_status": "bad_score"` |
+| `range` | The model returns 1.7 (scores should be 0 to 1) | An answer, with `"model_status": "bad_score"` |
+| `log` | The log file can't be saved | A 503 saying "We couldn't save your result". No result, because one that wasn't saved couldn't be appealed |
+| `style` | The style check crashes | A 500 with a short JSON error, instead of an HTML error page |
+
+One more thing to try with any of the model faults (`crash`, `hang`, `nan`,`range`): paste the submit command from above four times in a row. The first three try the model and fail. After that, the service stops asking the model for 60 seconds, so the fourth answer comes back right away with `"model_status": "skipped"`. This is easiest to see with `hang`: three slow answers, then a fast one.
+
+Every one of these leaves a line in the log too. To see the last five, paste this into your second terminal:
+
+```powershell
+# Windows
+curl.exe "http://127.0.0.1:5000/log?limit=5"
+```
+
+```bash
+# Mac/Linux
+curl "http://127.0.0.1:5000/log?limit=5"
+```
+
+When you're done, press Ctrl+C in the first terminal. Then run the commands for your system below in that same terminal. They switch the fault off and start the service normally:
+
+```powershell
+# Windows: the setting stays until you remove it or close the terminal
+Remove-Item Env:AI201_FAULT
+python app.py
+```
+
+```bash
+# Mac/Linux: the setting only lasted for that one run, so just start it
+python app.py
+```
+
+Want the model to time out sooner? By default it gets 10 seconds. Press Ctrl+C in the first terminal, then run this there to give it 3 seconds instead:
+
+```powershell
+# Windows: remove it later with Remove-Item Env:AI201_DETECTOR_TIMEOUT
+$env:AI201_DETECTOR_TIMEOUT = "3"; python app.py
+```
+
+```bash
+# Mac/Linux
+AI201_DETECTOR_TIMEOUT=3 python app.py
+```
+
+**Logs:** every request adds a line to `logs/audit.jsonl` with the time, what came in, what went out and `duration_ms`. See it at `GET /log`.
 
 **Needs**
 
