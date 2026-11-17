@@ -1061,10 +1061,13 @@ honest writer being accused.
 Shape B, harden against failure. I'm extending Provenance Guard. Right now it
 works when the model loads and answers, but if the model crashes partway
 through, hangs, or returns a bad score, the writer gets a 500 or waits
-forever. I'm adding three things: catch a model crash or a bad score instead
-of crashing, put a time limit on the model, and fall back to a style-only
-result marked as less certain when the model fails. I'm also adding a way to
-trigger each failure on purpose so I can test it, and timing in the log.
+forever. I'm adding:
+
+- Catch a model crash or a bad score instead of crashing.
+- A time limit on the model.
+- A style-only result, marked as less certain, when the model fails.
+- A way to trigger each failure on purpose so I can test it.
+- How long each request took, in the log.
 
 Out of scope:
 

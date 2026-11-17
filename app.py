@@ -24,9 +24,13 @@ Routes:
     GET  /health      is the service up, and is the model loaded
 """
 
+import math
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 
 import audit
 import config
@@ -39,6 +43,55 @@ MIN_TEXT_CHARS = 50
 MAX_TEXT_CHARS = 10_000
 
 app = Flask(__name__)
+
+
+# ── Capstone: timing and a model that can fail safely ────────────────────────
+
+# The model runs in its own thread so /submit can stop waiting for it. Python
+# can't kill a stuck thread, so a hung score keeps running in the background;
+# the request just stops waiting and answers without it.
+_model_pool = ThreadPoolExecutor(max_workers=4)
+
+
+@app.before_request
+def _start_timer():
+    g.start = time.perf_counter()
+
+
+def _elapsed_ms() -> int:
+    start = g.get("start", time.perf_counter())
+    return round((time.perf_counter() - start) * 1000)
+
+
+def _safe_model_signal(text: str) -> tuple[float | None, str]:
+    """
+    The model score, or None and the reason it failed.
+
+    Reasons: ok, unavailable (model won't load), timeout, error (crashed),
+    bad_score (not a number from 0 to 1).
+    """
+    try:
+        # Loading is slow the first time (10-20 s), so it isn't timed.
+        detector.warm_up()
+    except detector.DetectorUnavailable:
+        return None, "unavailable"
+
+    future = _model_pool.submit(detector.model_signal, text)
+    try:
+        score = future.result(timeout=config.DETECTOR_TIMEOUT_SECONDS)
+    except FutureTimeout:
+        return None, "timeout"
+    except Exception:  # noqa: BLE001 - any crash in the model is the same bad path
+        return None, "error"
+
+    if (
+        isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or math.isnan(score)
+        or not 0.0 <= score <= 1.0
+    ):
+        return None, "bad_score"
+    return float(score), "ok"
 
 
 # ── Rate limiting — UNIT 8 ────────────────────────────────────────────────────
@@ -114,6 +167,7 @@ if config.RATE_LIMITING_ENABLED:
             creator_id=payload.get("creator_id", "unknown"),
             reason="rate_limited",
             limit=str(exc.description),
+            duration_ms=_elapsed_ms(),
         )
         return jsonify({
             "error": "rate_limited",
@@ -231,14 +285,24 @@ def submit():
 
     content_id = str(uuid.uuid4())
 
-    try:
-        model_score = detector.model_signal(text)
-    except detector.DetectorUnavailable as exc:
-        return _error("detector_unavailable", str(exc), 503)
-
+    model_score, model_status = _safe_model_signal(text)
     style_score = stylometry.style_signal(text)
-    confidence = scoring.combine_signals(model_score, style_score)
+    degraded = model_status != "ok"
+
+    if not degraded:
+        confidence = scoring.combine_signals(model_score, style_score)
+    else:
+        # Capstone: the model failed, so answer with the style signal alone.
+        # One weak signal isn't enough to accuse anyone, so it's capped just
+        # below the AI threshold: the answer can be human or unsure, never AI.
+        confidence = round(min(style_score, config.AI_THRESHOLD - 0.01), 4)
+
     guess, label = scoring.score_to_label(confidence)
+    if degraded:
+        label += (
+            " Part of our check didn't work this time, so this result is less"
+            " certain than usual."
+        )
 
     audit.log_decision(
         content_id=content_id,
@@ -248,6 +312,10 @@ def submit():
         style_score=style_score,
         combined_score=confidence,
         label=label,
+        model_status=model_status,
+        degraded=degraded,
+        text_chars=len(text),
+        duration_ms=_elapsed_ms(),
     )
 
     return jsonify({
@@ -257,6 +325,8 @@ def submit():
         "label": label,
         "model_score": model_score,
         "style_score": style_score,
+        "model_status": model_status,
+        "degraded": degraded,
     })
 
 
@@ -277,6 +347,7 @@ def _error(code: str, message: str, status: int = 400):
         reason=code,
         endpoint=request.path,
         http_status=status,
+        duration_ms=_elapsed_ms(),
     )
     return jsonify({"error": code, "message": message}), status
 
@@ -327,6 +398,7 @@ def appeal():
         content_id=content_id,
         creator_id=entries[0].get("creator_id", "unknown"),
         reasoning=reasoning.strip(),
+        duration_ms=_elapsed_ms(),
     )
 
     return jsonify({

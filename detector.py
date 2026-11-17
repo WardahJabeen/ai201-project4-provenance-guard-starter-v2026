@@ -42,6 +42,7 @@ for yourself where it lands.
 """
 
 import math
+import time
 
 import config
 
@@ -125,6 +126,16 @@ def model_signal(text: str) -> float:
     inputs in Milestone 4 and seen what your own text actually scores. If you
     do, say so in your README: it's a scoring decision, not a detail.
     """
+    # Capstone: a failure made on purpose, so the bad path can be tested.
+    if config.FAULT == "crash":
+        raise RuntimeError("Injected fault: model crashed.")
+    if config.FAULT == "hang":
+        time.sleep(config.FAULT_HANG_SECONDS)
+    if config.FAULT == "nan":
+        return float("nan")
+    if config.FAULT == "range":
+        return 1.7
+
     ppl = perplexity(text)
 
     midpoint = 45.0    # perplexity that scores 0.5

@@ -46,6 +46,24 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 # 300 words, which is enough for the signal to mean something.
 DETECTOR_MAX_TOKENS = 400
 
+# Capstone. How long one model score may take before /submit gives up on it
+# and answers with the style signal alone. A normal score takes a second or
+# two once the model is loaded; loading itself isn't timed.
+DETECTOR_TIMEOUT_SECONDS = float(os.getenv("AI201_DETECTOR_TIMEOUT", "10"))
+
+# Capstone. Makes the model fail on purpose so the bad path can be tested.
+# Set it before starting the service, e.g. in PowerShell:
+#     $env:AI201_FAULT = "crash"; python app.py
+#
+#   crash  model_signal raises an error
+#   hang   model_signal sleeps for FAULT_HANG_SECONDS (longer than the timeout)
+#   nan    model_signal returns NaN
+#   range  model_signal returns 1.7, outside 0-1
+#
+# Empty (the default) means no fault.
+FAULT = os.getenv("AI201_FAULT", "").strip().lower()
+FAULT_HANG_SECONDS = 30
+
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
