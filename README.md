@@ -1163,6 +1163,116 @@ The bad path costs more. A model hang uses the full 10-second time limit, so
 after 3 failures in a row the model is skipped and answers come back in about
 1 ms.
 
+**Run Log**
+
+I ran all five criteria three separate times with `python run_capstone.py
+--trial N`. Each trial starts `python app.py` itself, restarts it with a
+different `AI201_FAULT` for each criterion, and writes to the real
+`logs/audit.jsonl`. The full output of each trial is saved in `results/`:
+`capstone_2026-11-17_1221_trial1.md`, `..._1225_trial2.md` and
+`..._1229_trial3.md`.
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. A failed model still answers, never AI | 9 of 9 | 9/9 | 9/9 | 9/9 | MET |
+| 2. Every request leaves a log line with its timing | 20 of 20 | 20/20 | 20/20 | 20/20 | MET |
+| 3. After 3 failures, answers come straight back | 5 of 5, then a retry | 5/5, retried | 5/5, retried | 5/5, retried | MET |
+| 4. A result that can't be saved is never handed out | 6 of 6, log unchanged | 6/6 | 6/6 | 6/6 | MET |
+| 5. 8 writers at once while the model hangs | 8 of 8 in 12 s or less | 8/8 | 8/8 | 8/8 | MET |
+
+The counts came out the same three times because the faults are switched on
+on purpose, so each one fails the same way every time. They are still three
+real runs. Each trial has its own `creator_id` prefix (`t1_1221`, `t2_1225`,
+`t3_1229`) and wrote its own 47 log lines, with new `content_id`s and
+timestamps. The timings differ between runs:
+
+- Criterion 2: the biggest gap between client and log timing was 28 ms, 25 ms
+  and 29 ms.
+- Criterion 3: the skipped answers took 0.004 to 0.006 s, 0.007 to 0.010 s and
+  0.004 to 0.030 s.
+- Criterion 5: the 8 writers took 10.01 to 10.05 s, 10.02 to 10.05 s and 10.03
+  to 10.05 s.
+
+Real output from run 1, one block per criterion:
+
+Criterion 1. The model crashed, so the answer came from the style check alone.
+Made by `app.py::_safe_model_signal` (catches the crash) and `app.py::submit`
+(the style-only answer, capped below AI). Log line from `audit.py::log_decision`:
+
+```
+{"timestamp": "2026-11-17T20:21:17+00:00", "content_id": "4a058697-dcb6-42b5-996e-6466cb519286", "creator_id": "t1_1221_c1_crash_1", "guess": "human", "model_score": null, "style_score": 0.2807, "combined_score": 0.2807, "label": "We think this was probably written by a person. Part of our check didn't work this time, so this result is less certain than usual.", "status": "decided", "model_status": "error", "degraded": true, "text_chars": 775, "duration_ms": 4}
+```
+
+Criterion 2. One normal result and one rejected input, both with
+`duration_ms`. Made by `app.py::submit` and `app.py::_error`, timed by
+`app.py::_elapsed_ms`, written by `audit.py::log_decision` and
+`audit.py::log_rejection`:
+
+```
+{"timestamp": "2026-11-17T20:22:23+00:00", "content_id": "7fbb80a9-f612-4a25-919d-fe63a4e69b7f", "creator_id": "t1_1221_c2_normal_1", "guess": "unsure", "model_score": 0.6662, "style_score": 0.2807, "combined_score": 0.4735, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work.", "status": "decided", "model_status": "ok", "degraded": false, "text_chars": 775, "duration_ms": 225}
+{"timestamp": "2026-11-17T20:22:24+00:00", "creator_id": "t1_1221_c2_bad_0", "event": "rejected", "status": "rejected", "reason": "missing_text", "endpoint": "/submit", "http_status": 400, "duration_ms": 1}
+```
+
+Criterion 3. Three timeouts, then five skipped answers, then the model tried
+again after 61 s. Made by `app.py::_safe_model_signal` (the skip rule) and
+`app.py::_ask_model` (the time limit). From `run_capstone.py::criterion_3`:
+
+```
+- failure #1: 200 timeout in 30.41 s
+- failure #2: 200 timeout in 10.03 s
+- failure #3: 200 timeout in 10.01 s
+- next #1: 200 skipped in 0.006 s PASS
+- next #2: 200 skipped in 0.004 s PASS
+- next #3: 200 skipped in 0.005 s PASS
+- next #4: 200 skipped in 0.005 s PASS
+- next #5: 200 skipped in 0.005 s PASS
+- 61 s later: 200 timeout in 10.04 s PASS (model tried again)
+```
+
+The first skipped answer in the log:
+
+```
+{"timestamp": "2026-11-17T20:23:31+00:00", "content_id": "f96f8311-5c6d-4576-a1c5-b49c2b536e85", "creator_id": "t1_1221_c3_skip_0", "guess": "unsure", "model_score": null, "style_score": 0.6618, "combined_score": 0.64, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work. Part of our check didn't work this time, so this result is less certain than usual.", "status": "decided", "model_status": "skipped", "degraded": true, "text_chars": 657, "duration_ms": 2}
+```
+
+Criterion 4. Every request refused with a 503, and the log didn't grow. Made
+by `audit.py::_append` (one retry, then `LogWriteFailed`) and `app.py::submit`
+/ `app.py::appeal` (the 503). From `run_capstone.py::criterion_4`:
+
+```
+- submit #1: 503 PASS {"error": "log_unavailable", "message": "We couldn't save your result, so we haven't given one. Please try again in a minute."}
+- submit #2: 503 PASS {"error": "log_unavailable", "message": "We couldn't save your result, so we haven't given one. Please try again in a minute."}
+- submit #3: 503 PASS {"error": "log_unavailable", "message": "We couldn't save your result, so we haven't given one. Please try again in a minute."}
+- submit #4: 503 PASS {"error": "log_unavailable", "message": "We couldn't save your result, so we haven't given one. Please try again in a minute."}
+- submit #5: 503 PASS {"error": "log_unavailable", "message": "We couldn't save your result, so we haven't given one. Please try again in a minute."}
+- appeal on a173d00b-f7c6-4c79-aa0f-8f747d227b4e: 503 PASS {"error": "log_unavailable", "message": "We couldn't save your appeal. Please try again in a minute."}
+- log lines before 511, after 511: unchanged
+```
+
+Criterion 5. Eight writers at once, all answered at the 10-second limit. Made
+by `app.py::_ask_model`: the limit starts when each request starts waiting,
+so requests queued behind the 4 busy worker threads give up at 10 s too. From
+`run_capstone.py::criterion_5`:
+
+```
+- warm-up: 200 timeout in 23.54 s (loads the model, not counted)
+- writer 1: 200 timeout in 10.04 s PASS
+- writer 2: 200 timeout in 10.05 s PASS
+- writer 3: 200 timeout in 10.01 s PASS
+- writer 4: 200 timeout in 10.04 s PASS
+- writer 5: 200 timeout in 10.04 s PASS
+- writer 6: 200 timeout in 10.05 s PASS
+- writer 7: 200 timeout in 10.05 s PASS
+- writer 8: 200 timeout in 10.05 s PASS
+```
+
+One of those eight in the log:
+
+```
+{"timestamp": "2026-11-17T20:25:32+00:00", "content_id": "4bf701bf-7556-4e4f-9046-006e1b1ac6d0", "creator_id": "t1_1221_c5_0", "guess": "unsure", "model_score": null, "style_score": 0.6618, "combined_score": 0.64, "label": "We can't tell whether this was written by a person or with help from AI. Lots of people's own writing lands here, so this isn't a judgment about you or your work. Part of our check didn't work this time, so this result is less certain than usual.", "status": "decided", "model_status": "timeout", "degraded": true, "text_chars": 657, "duration_ms": 10007}
+```
+
+
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
