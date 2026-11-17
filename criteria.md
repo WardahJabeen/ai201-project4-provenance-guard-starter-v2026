@@ -134,3 +134,51 @@ easy to make, so each one should get a clear, friendly answer instead.
      A number you missed stays where it is, gets diagnosed, and gets a fix
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
+
+---
+
+# Capstone criteria
+
+---
+
+## 1. A failed model still gives an answer, and never an accusation
+
+With each of the faults `crash`, `nan` and `range`, 3 submissions (9 in total): 9 of 9 return 200 with `degraded: true` and the matching `model_status` (`error` for crash, `bad_score` for nan and range), and 0 of 9 are labelled AI.
+
+**Why this target:** Before this extension, a crash gave the writer a 500 and nothing else, so every single one should now get an answer. None may say AI, because that answer only has the style check behind it, and one weak check isn't enough to accuse someone. One wrong accusation costs a writer far more than a missed AI text costs the site. It can't be 8 of 9, because the one that failed would be a writer who got a 500, or an accusation backed by a single weak check: exactly what this extension exists to stop.
+
+---
+
+## 2. Every request leaves a log line with its timing
+
+20 requests, each from a different `creator_id`: 10 normal submissions, 5 with bad input (missing, empty or too-short text), then 5 more after restarting with the `crash` fault. 20 of 20 add exactly one log line with a `timestamp` and
+`duration_ms`. The 15 that got a result also have `model_status` and `text_chars`, and the 5 rejected ones have a `reason`. Each `duration_ms` is within 100 ms of the time measured by the client.
+
+**Why this target:** The log is the only record of what happened, so it's how I'd find a problem later, and it's where my cost number comes from. A request with no log line is invisible, so it has to be all 20, including the failures. I allow 100 ms because the client also counts sending and receiving the request, which the service can't see. A normal run takes about 180 ms, so a gap bigger than 100 ms would mean `duration_ms` is missing a real part of the work, and my cost number would be wrong.
+
+---
+
+## 3. After 3 failures, answers come straight back
+
+With the `hang` fault, after 3 timed-out submissions, the next 5 submissions (sent within 60 seconds, each from a different `creator_id` so the rate limit doesn't get in the way) each return 200 with `model_status: "skipped"` in
+under 1 second. The first submission sent more than 60 seconds later tries the model again: its `model_status` is `timeout`, not `skipped`.
+
+**Why this target:** A normal run takes about 0.18 seconds, so 1 second leaves plenty of room while still being 10 times faster than waiting out the time limit. The second part matters just as much: if the model were never tried
+again, one bad minute would turn the model off for good, and every writer after that would only get the weaker style-only answer.
+
+---
+
+## 4. A result that can't be saved is never handed out
+
+With the `log` fault, 5 submissions and 1 appeal (on a `content_id` saved earlier): 6 of 6 return 503 with `log_unavailable`, 0 return a label or `under_review`, and the number of lines in `logs/audit.jsonl` doesn't change.
+
+**Why this target:** `/appeal` finds a submission through the log. A result that wasn't saved can never be appealed, so a writer labelled AI would have no way to argue back. An appeal that wasn't saved would never be reviewed. Both
+have to be 6 of 6, because one unsaved result is one writer with no way out.
+
+---
+
+## 5. Many writers at once while the model is stuck
+
+With the `hang` fault, after one warm-up submission so the model is already loaded, 8 submissions sent at the same moment (each from a different `creator_id`): 8 of 8 return 200 with a style-only answer, each in no more than 12 seconds.
+
+**Why this target:** The model runs on only 4 worker threads, so 8 at once is twice what it can handle. If the model breaks while the site is busy, everyone is hit at the same time, not one at a time. The time limit is 10 seconds, and I allow 2 more for the style check and the reply. A writer shouldn't wait longer than that just because others submitted at the same moment. I haven't tested this case, and it's the one most likely to miss.
