@@ -10,7 +10,7 @@ Each step shows Windows (PowerShell) and Mac/Linux.
 # Windows
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements-lock.txt
+python -m pip install -r requirements-lock.txt
 python detector.py
 ```
 
@@ -18,7 +18,7 @@ python detector.py
 # Mac/Linux
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-lock.txt
+python -m pip install -r requirements-lock.txt
 python detector.py
 ```
 
@@ -28,8 +28,7 @@ python detector.py
 python app.py
 ```
 
-Runs on `http://127.0.0.1:5000`. The first submission takes about 12 seconds
-while the model loads.
+Make sure it runs on `http://127.0.0.1:5000`. The first submission takes about 12 seconds while the model loads.
 
 **3. Check it** (second terminal)
 
@@ -177,7 +176,7 @@ assumed — the starter ships one that already answers.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python test.py
 ```
 
@@ -446,6 +445,7 @@ sentences, a pasted quotation. That is very cheap to do on purpose.
 | `501 not_implemented` | Correct at the start — that's the TODO in `app.py` |
 | `404` from curl | Is the server running? Is the path exactly what you typed? |
 | `Cannot bind parameter 'Headers'` | You're in PowerShell, where `curl` is a different tool. Use `curl.exe`, on one line |
+| `pip.exe` ... `An Application Control policy has blocked this file` | Windows (Smart App Control) is blocking the launcher, not pip itself. Use `python -m pip install ...` instead |
 | Request body arrives empty | curl needs `-H "Content-Type: application/json"` |
 | `Address already in use` | A server left running from an earlier attempt. Kill it, don't debug it |
 | The first submission takes 10+ seconds | Signal one is loading the model into memory. Later ones take a second or two |
